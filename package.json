@@ -1,6 +1,6 @@
 {
   "name": "obagents",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Local-first agent profile manager. Create, list, edit, and delete agent profiles stored in the Vault (~/.obagents).",
   "type": "module",
   "bin": {
