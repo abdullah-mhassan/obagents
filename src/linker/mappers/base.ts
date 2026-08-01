@@ -161,6 +161,10 @@ export interface MarkdownMcpDescriptor {
     configPath: string | ((projectDir: string) => string);
     format: McpFormat;
   };
+  checkDrift?: (
+    projectDir: string,
+    agentName: string,
+  ) => import("../types.js").DriftCheckResult | Promise<import("../types.js").DriftCheckResult>;
   afterWrite?: (projectDir: string, agentName: string, options?: MapperWriteOptions) => Promise<void>;
   afterClean?: (projectDir: string, options?: MapperCleanOptions) => Promise<void>;
 }
@@ -199,6 +203,7 @@ export function createMarkdownMcpMapper(descriptor: MarkdownMcpDescriptor): Targ
 
   return {
     ...baseMapper,
+    ...(descriptor.checkDrift ? { checkDrift: descriptor.checkDrift } : {}),
     async apply(context: LinkContext, options?: MapperWriteOptions): Promise<MapperResult> {
       const result = await baseMapper.apply(context, options);
 

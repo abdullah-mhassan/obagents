@@ -107,6 +107,7 @@ export async function diffProject(projectDir?: string): Promise<ProjectDrift> {
 
       if (!fs.existsSync(configPath)) {
         mcpStatus = "missing";
+        mcpDiff = `MCP server "${expectedMcp.name}" configuration file missing at ${configPath}`;
       } else {
         const raw = await fs.readFile(configPath, "utf8");
         let parsedConfig: Record<string, unknown>;
@@ -129,15 +130,21 @@ export async function diffProject(projectDir?: string): Promise<ProjectDrift> {
           mcpDiff = checkResult.diff;
         }
       }
+    } else if (adapter?.checkDrift && !(descriptor && "custom" in descriptor && descriptor.custom)) {
+      const checkResult = await adapter.checkDrift(dir, activeAgent);
+      mcpStatus = checkResult.status;
+      if (checkResult.diff) {
+        mcpDiff = checkResult.diff;
+      }
     }
 
     // Combine artifact and MCP statuses
     let finalStatus: DriftStatus = "in-sync";
     let finalDiff: string | undefined = undefined;
 
-    if (artifactStatus === "missing" || mcpStatus === "missing") {
+    if (artifactStatus === "missing") {
       finalStatus = "missing";
-    } else if (artifactStatus === "drifted" || mcpStatus === "drifted") {
+    } else if (artifactStatus === "drifted" || mcpStatus === "drifted" || mcpStatus === "missing") {
       finalStatus = "drifted";
       finalDiff = artifactDiff || mcpDiff || "MCP configuration mismatch";
     }

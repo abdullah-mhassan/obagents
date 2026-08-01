@@ -8,13 +8,13 @@ This means you can have a "Hive Orchestrator" agent that delegates tasks to spec
 
 ## Global Gateway Architecture
 
-OB Agents uses a single, global MCP server (`obagents serve`) rather than separate per-agent server instances.
+OB Agents uses a single, global MCP server (`obagents serve`) rather than separate per-agent instances.
 
 ### 1. User-Level vs Per-Project Fallback Registration
 - **User-Level (Global) Registration:** Global-capable tools (e.g., Cursor, Windsurf, Antigravity, Claude Code, Roo Code, etc.) register the single `obagents` gateway server at the user configuration level via `obagents gateway install` (or during target linking). Once installed globally, a single MCP server handles requests across all your projects and agents.
 - **Per-Project Fallback Registration:** For project-scoped tools or project-specific configurations, linking writes a fallback entry invoking `obagents serve -p <projectPath>`, which explicitly binds the server to that project root.
 
-Stale per-agent server entries from earlier versions (`obagents-<agent>-<projectHash>`) are automatically migrated and cleaned up during link and gateway operations.
+Stale per-agent entries from earlier versions (`obagents-<agent>-<projectHash>`) are automatically migrated and cleaned up during link and gateway operations.
 
 ### 2. Per-Call Context & Agent Resolution
 When an AI tool invokes an MCP tool (such as `load_agent_context`, `consult_agent`, `read_state`, or `update_state`):

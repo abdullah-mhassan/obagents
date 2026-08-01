@@ -8,6 +8,42 @@ export function isLegacyMyagentKey(key: string): boolean {
   return key.startsWith("myagent-");
 }
 
+export function cleanObjectStaleAndLegacyKeys(container: Record<string, any>): void {
+  for (const key of Object.keys(container)) {
+    if (isStaleObagentsKey(key)) {
+      delete container[key];
+    } else if (isLegacyMyagentKey(key)) {
+      logger.warning(`Legacy MCP entry "${key}" detected in configuration. Preserving entry.`);
+    }
+  }
+}
+
+export function filterArrayStaleAndLegacyItems(list: any[]): any[] {
+  const remaining: any[] = [];
+  for (const item of list) {
+    const name = item?.name;
+    if (typeof name === "string") {
+      if (isStaleObagentsKey(name)) {
+        continue;
+      }
+      if (isLegacyMyagentKey(name)) {
+        logger.warning(`Legacy MCP entry "${name}" detected in configuration. Preserving entry.`);
+      }
+    }
+    remaining.push(item);
+  }
+  return remaining;
+}
+
+export function findStaleKey(keys: Iterable<string>): string | undefined {
+  for (const key of keys) {
+    if (isStaleObagentsKey(key)) {
+      return key;
+    }
+  }
+  return undefined;
+}
+
 export interface McpConfigAdapter {
   inject(config: any, serverName: string, command: string, args: string[]): any;
   retract(config: any, serverName: string, agentName: string): any;
@@ -22,13 +58,7 @@ export interface McpConfigAdapter {
 export const mcpServersAdapter: McpConfigAdapter = {
   inject(config, serverName, command, args) {
     config.mcpServers = config.mcpServers || {};
-    for (const key of Object.keys(config.mcpServers)) {
-      if (isStaleObagentsKey(key)) {
-        delete config.mcpServers[key];
-      } else if (isLegacyMyagentKey(key)) {
-        logger.warning(`Legacy MCP entry "${key}" detected in configuration. Preserving entry.`);
-      }
-    }
+    cleanObjectStaleAndLegacyKeys(config.mcpServers);
     config.mcpServers[serverName] = { command, args };
     return config;
   },
@@ -46,10 +76,9 @@ export const mcpServersAdapter: McpConfigAdapter = {
       return { status: "drifted", diff: `MCP server "${serverName}" configuration mismatch` };
     }
     if (c.mcpServers && typeof c.mcpServers === "object") {
-      for (const key of Object.keys(c.mcpServers)) {
-        if (isStaleObagentsKey(key)) {
-          return { status: "drifted", diff: `Stale per-agent MCP entry "${key}" present` };
-        }
+      const staleKey = findStaleKey(Object.keys(c.mcpServers));
+      if (staleKey) {
+        return { status: "drifted", diff: `Stale per-agent MCP entry "${staleKey}" present` };
       }
     }
     return { status: "in-sync" };
@@ -59,13 +88,7 @@ export const mcpServersAdapter: McpConfigAdapter = {
 export const serversAdapter: McpConfigAdapter = {
   inject(config, serverName, command, args) {
     config.servers = config.servers || {};
-    for (const key of Object.keys(config.servers)) {
-      if (isStaleObagentsKey(key)) {
-        delete config.servers[key];
-      } else if (isLegacyMyagentKey(key)) {
-        logger.warning(`Legacy MCP entry "${key}" detected in configuration. Preserving entry.`);
-      }
-    }
+    cleanObjectStaleAndLegacyKeys(config.servers);
     config.servers[serverName] = {
       type: "stdio",
       command,
@@ -93,10 +116,9 @@ export const serversAdapter: McpConfigAdapter = {
       return { status: "drifted", diff: `MCP server "${serverName}" configuration mismatch` };
     }
     if (c.servers && typeof c.servers === "object") {
-      for (const key of Object.keys(c.servers)) {
-        if (isStaleObagentsKey(key)) {
-          return { status: "drifted", diff: `Stale per-agent MCP entry "${key}" present` };
-        }
+      const staleKey = findStaleKey(Object.keys(c.servers));
+      if (staleKey) {
+        return { status: "drifted", diff: `Stale per-agent MCP entry "${staleKey}" present` };
       }
     }
     return { status: "in-sync" };
@@ -106,13 +128,7 @@ export const serversAdapter: McpConfigAdapter = {
 export const opencodeAdapter: McpConfigAdapter = {
   inject(config, serverName, command, args) {
     config.mcp = config.mcp || {};
-    for (const key of Object.keys(config.mcp)) {
-      if (isStaleObagentsKey(key)) {
-        delete config.mcp[key];
-      } else if (isLegacyMyagentKey(key)) {
-        logger.warning(`Legacy MCP entry "${key}" detected in configuration. Preserving entry.`);
-      }
-    }
+    cleanObjectStaleAndLegacyKeys(config.mcp);
     config.mcp[serverName] = {
       type: "local",
       command: [command, ...args],
@@ -140,10 +156,9 @@ export const opencodeAdapter: McpConfigAdapter = {
       return { status: "drifted", diff: `MCP server "${serverName}" configuration mismatch` };
     }
     if (c.mcp && typeof c.mcp === "object") {
-      for (const key of Object.keys(c.mcp)) {
-        if (isStaleObagentsKey(key)) {
-          return { status: "drifted", diff: `Stale per-agent MCP entry "${key}" present` };
-        }
+      const staleKey = findStaleKey(Object.keys(c.mcp));
+      if (staleKey) {
+        return { status: "drifted", diff: `Stale per-agent MCP entry "${staleKey}" present` };
       }
     }
     return { status: "in-sync" };
@@ -153,18 +168,7 @@ export const opencodeAdapter: McpConfigAdapter = {
 export const arrayAdapter: McpConfigAdapter = {
   inject(config, serverName, command, args) {
     const list = Array.isArray(config.mcpServers) ? config.mcpServers : [];
-    const remaining: any[] = [];
-    for (const item of list) {
-      const name = item?.name;
-      if (typeof name === "string" && isStaleObagentsKey(name)) {
-        continue;
-      }
-      if (typeof name === "string" && isLegacyMyagentKey(name)) {
-        logger.warning(`Legacy MCP entry "${name}" detected in configuration. Preserving entry.`);
-      }
-      remaining.push(item);
-    }
-    config.mcpServers = remaining;
+    config.mcpServers = filterArrayStaleAndLegacyItems(list);
     const existingIndex = config.mcpServers.findIndex((s: any) => s?.name === serverName);
     const newServer = {
       name: serverName,
@@ -203,11 +207,10 @@ export const arrayAdapter: McpConfigAdapter = {
     ) {
       return { status: "drifted", diff: `MCP server "${serverName}" configuration mismatch` };
     }
-    for (const item of list) {
-      const name = item?.name;
-      if (typeof name === "string" && isStaleObagentsKey(name)) {
-        return { status: "drifted", diff: `Stale per-agent MCP entry "${name}" present` };
-      }
+    const names = list.map((item) => item?.name).filter((name): name is string => typeof name === "string");
+    const staleKey = findStaleKey(names);
+    if (staleKey) {
+      return { status: "drifted", diff: `Stale per-agent MCP entry "${staleKey}" present` };
     }
     return { status: "in-sync" };
   },
@@ -219,4 +222,3 @@ export const adapters: Record<string, McpConfigAdapter> = {
   opencode: opencodeAdapter,
   array: arrayAdapter,
 };
-

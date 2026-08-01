@@ -1,5 +1,7 @@
+import { EventEmitter } from "node:events";
+import { spawn } from "node:child_process";
 import { join } from "node:path";
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { useMemoryFileSystem, useNodeFileSystem, fs } from "../../src/utils/fs.js";
 import { diffProject, fixDrift, unifiedDiff } from "../../src/linker/diff.js";
 import { createMapper } from "../../src/linker/mappers/base.js";
@@ -10,6 +12,18 @@ import { parse, stringify } from "yaml";
 
 import { createAgent } from "../../src/vault/agent.js";
 import { overrideVaultRoot, pathResolver } from "../../src/utils/paths.js";
+
+vi.mock("node:child_process", () => ({
+  spawn: vi.fn(),
+}));
+
+const spawnMock = vi.mocked(spawn);
+
+function spawnExited(code: number): EventEmitter {
+  const child = new EventEmitter();
+  queueMicrotask(() => child.emit("exit", code));
+  return child;
+}
 
 const genericMapper = createMapper(DESCRIPTORS.find((d) => d.key === "generic")!);
 const PROJECT = "/virtual/project";
@@ -22,12 +36,16 @@ describe("project drift diff", () => {
   beforeEach(async () => {
     useMemoryFileSystem();
     overrideVaultRoot("/virtual/vault");
+    pathResolver.setHomeDir("/virtual/home");
+    spawnMock.mockReset();
+    spawnMock.mockImplementation(() => spawnExited(0) as any);
     await createAgent("odba");
   });
 
   afterEach(() => {
     useNodeFileSystem();
     overrideVaultRoot(null);
+    pathResolver.reset();
   });
 
   it("reports in-sync when the linked file matches the compiled roster", async () => {
@@ -98,7 +116,7 @@ describe("project drift diff", () => {
 
     await fs.rm(mcpPath, { force: true });
     res = await diffProject(PROJECT);
-    expect(res.targets.find((t) => t.key === "cursor")?.status).toBe("missing");
+    expect(res.targets.find((t) => t.key === "cursor")?.status).toBe("drifted");
     pathResolver.reset();
   });
 
@@ -119,7 +137,7 @@ describe("project drift diff", () => {
 
     await fs.rm(mcpPath, { force: true });
     res = await diffProject(PROJECT);
-    expect(res.targets.find((t) => t.key === "kilo")?.status).toBe("missing");
+    expect(res.targets.find((t) => t.key === "kilo")?.status).toBe("drifted");
   });
 });
 
@@ -219,6 +237,34 @@ describe("aider drift (artifact-level)", () => {
 
     const { targets } = await diffProject(PROJECT);
     expect(targets.find((t) => t.key === "aider")?.status).toBe("in-sync");
+  });
+
+  it("checks Codex CLI MCP server registration drift via checkDrift for codex", async () => {
+    spawnMock.mockImplementation(() => spawnExited(0) as any);
+    await seedLinkedProject(["codex"]);
+
+    const res1 = await diffProject(PROJECT);
+    expect(res1.targets.find((t) => t.key === "codex")?.status).toBe("in-sync");
+
+    spawnMock.mockImplementation(() => spawnExited(1) as any);
+    const res2 = await diffProject(PROJECT);
+    const codexDrift = res2.targets.find((t) => t.key === "codex");
+    expect(codexDrift?.status).toBe("drifted");
+    expect(codexDrift?.diff).toContain("Codex MCP server 'obagents' is not registered");
+  });
+
+  it("handles absent global MCP config file cleanly without reporting false missing drift status when artifact is present", async () => {
+    spawnMock.mockImplementation(() => spawnExited(0) as any);
+    await seedLinkedProject(["cursor"]);
+    const cursorConfigPath = pathResolver.getCursorMcpPath();
+    if (fs.existsSync(cursorConfigPath)) {
+      await fs.rm(cursorConfigPath, { force: true });
+    }
+
+    const { targets } = await diffProject(PROJECT);
+    const cursor = targets.find((t) => t.key === "cursor");
+    expect(cursor?.status).toBe("drifted");
+    expect(cursor?.diff).toContain("missing");
   });
 });
 

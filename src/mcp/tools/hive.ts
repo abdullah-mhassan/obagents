@@ -56,6 +56,25 @@ async function runHiveAction<T>(
   }
 }
 
+async function resolveProjectDirAndCheckRoster(
+  agent: string,
+  projectParam: string | undefined,
+  options: RegisterToolsOptions,
+): Promise<{ projectDir: string | undefined; error?: string }> {
+  if (options.resolveGateway) {
+    const projectDir = (await options.resolveGateway({ project: projectParam })).projectDir;
+    const roster = await vaultSyncEngine.getAgentsForProject(projectDir);
+    if (!roster.includes(agent)) {
+      return {
+        projectDir,
+        error: `Agent "${agent}" is not linked to project "${projectDir}". Linked agents: ${roster.join(", ")}`,
+      };
+    }
+    return { projectDir };
+  }
+  return { projectDir: options.projectDir };
+}
+
 export function registerHiveTools(
   server: McpServer,
   agentName: string, // The agent running the MCP server
@@ -114,16 +133,8 @@ export function registerHiveTools(
         if (!agentExists(agent)) {
           return errorResult(`Agent "${agent}" does not exist.`);
         }
-        let projectDir: string | undefined;
-        if (options.resolveGateway) {
-          projectDir = (await options.resolveGateway({ project })).projectDir;
-          const roster = await vaultSyncEngine.getAgentsForProject(projectDir);
-          if (!roster.includes(agent)) {
-            return errorResult(`Agent "${agent}" is not linked to project "${projectDir}". Linked agents: ${roster.join(", ")}`);
-          }
-        } else {
-          projectDir = options.projectDir;
-        }
+        const { projectDir, error } = await resolveProjectDirAndCheckRoster(agent, project, options);
+        if (error) return errorResult(error);
         const compiled = await compileAgent(agent, projectDir);
         return jsonResult({ memory: compiled.content, note: MEMORY_ONLY_NOTE });
       } catch (error) {
@@ -139,16 +150,8 @@ export function registerHiveTools(
     async ({ targetAgent, query, limit, project }) => {
       try {
         const validated = validateAgentName(targetAgent);
-        let projectDir: string | undefined;
-        if (options.resolveGateway) {
-          projectDir = (await options.resolveGateway({ project })).projectDir;
-          const roster = await vaultSyncEngine.getAgentsForProject(projectDir);
-          if (!roster.includes(validated)) {
-            return errorResult(`Agent "${validated}" is not linked to project "${projectDir}". Linked agents: ${roster.join(", ")}`);
-          }
-        } else {
-          projectDir = options.projectDir;
-        }
+        const { projectDir, error } = await resolveProjectDirAndCheckRoster(validated, project, options);
+        if (error) return errorResult(error);
         const outcome = await consultAgentMemory(validated, query, { limit, projectDir, store: options.store, db: options.db });
         return jsonResult(outcome);
       } catch (error) {

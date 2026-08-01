@@ -160,6 +160,14 @@ export const DESCRIPTORS: MapperDescriptor[] = [
     name: "Codex CLI",
     relativePath: ".codex/AGENTS.md",
     owned: true,
+    checkDrift: async (projectDir: string) => {
+      try {
+        await runCodexMcp(["mcp", "get", "obagents", "--scope", "user"], projectDir);
+        return { status: "in-sync" };
+      } catch {
+        return { status: "missing", diff: "Codex MCP server 'obagents' is not registered" };
+      }
+    },
     afterWrite: async (projectDir: string, agentName: string, options?: MapperWriteOptions) => {
       if (!options?.dryRun) {
         const bin = resolveBinaryCommand();
