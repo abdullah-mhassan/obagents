@@ -7,7 +7,7 @@ import { addEpisode, findMemoryEpisodeByContent } from "../../src/memory/fts.js"
 import { AgentMemoryVault } from "../../src/memory/vault.ts";
 import { linkGraph } from "../../src/vault/link-graph.js";
 import { projectVault } from "../../src/vault/project.js";
-import { createMcpServer } from "../../src/mcp/server.js";
+import { createGatewayMcpServer } from "../../src/mcp/server.js";
 import { createAgent } from "../../src/vault/agent.js";
 import { writeJsonAtomic, fs, useMemoryFileSystem, useNodeFileSystem } from "../../src/utils/fs.js";
 import { resolveBinaryCommand } from "../../src/linker/mcp.js";
@@ -82,12 +82,11 @@ describe("Critical Findings & Spec Remediations", () => {
     });
   });
 
-  describe("createMcpServer projectDir validation", () => {
+  describe("createGatewayMcpServer projectDir validation", () => {
     it("rejects non-existent project directory", async () => {
-      await createAgent("valid-agent");
       const phantomDir = join(tmpRoot, "does-not-exist");
 
-      expect(() => createMcpServer("valid-agent", phantomDir)).toThrow(
+      expect(() => createGatewayMcpServer(phantomDir)).toThrow(
         `Project directory "${phantomDir}" does not exist on disk.`
       );
     });

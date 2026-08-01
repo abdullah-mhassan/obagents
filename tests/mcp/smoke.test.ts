@@ -1,17 +1,20 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createMcpServer } from "../../src/mcp/server.js";
+import { createGatewayMcpServer } from "../../src/mcp/server.js";
 import { createAgent } from "../../src/vault/agent.js";
 import { overrideVaultRoot } from "../../src/utils/paths.js";
-import { getCoreFilePath } from "../../src/vault/project.js";
+import { openDatabase } from "../../src/memory/db.js";
+import { searchHistory } from "../../src/memory/fts.js";
 import { SUPPORTED_TARGETS } from "../../src/utils/constants.js";
 
 const vault = mkdtempSync(join(tmpdir(), "obagents-mcp-"));
 const project = mkdtempSync(join(tmpdir(), "obagents-proj-"));
+const project2 = mkdtempSync(join(tmpdir(), "obagents-proj2-"));
+const project3 = mkdtempSync(join(tmpdir(), "obagents-proj3-"));
 overrideVaultRoot(vault);
 
 interface CallResult {
@@ -24,8 +27,18 @@ function parse(res: CallResult): any {
   return JSON.parse(res.content[0].text);
 }
 
-async function withServer(agent: string, projectDir: string, fn: (client: Client) => Promise<void>): Promise<void> {
-  const server = createMcpServer(agent, projectDir);
+function memoryContains(dbPathAgent: string, content: string): boolean {
+  const db = openDatabase({ agentName: dbPathAgent });
+  try {
+    const hits = searchHistory(db, content, { agentName: dbPathAgent });
+    return hits.some((h) => h.source === "memory" && h.content.includes(content));
+  } finally {
+    db.close();
+  }
+}
+
+async function withServer(projectDir: string, fn: (client: Client) => Promise<void>): Promise<void> {
+  const server = createGatewayMcpServer(projectDir);
   const [clientT, serverT] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "smoke", version: "0.0.0" });
   await server.connect(serverT);
@@ -38,13 +51,15 @@ async function withServer(agent: string, projectDir: string, fn: (client: Client
   }
 }
 
-describe("MCP server day-in-life (in-process client)", () => {
+describe("MCP Hive gateway day-in-life (in-process client)", () => {
   beforeAll(async () => {
     await createAgent("host", { description: "host agent" });
+    await createAgent("worker", { description: "worker agent" });
+    await createAgent("stranger", { description: "stranger agent" });
   });
 
-  it("spawns a worker, links it, records/recalls memory, consolidates, and cross-consults", async () => {
-    await withServer("host", project, async (client) => {
+  it("resolves the Hive per tool call: roster targeting, project routing, roster enforcement", async () => {
+    await withServer(project, async (client) => {
       const tools = await client.listTools();
       const names = tools.tools.map((t) => t.name);
       for (const n of [
@@ -56,43 +71,70 @@ describe("MCP server day-in-life (in-process client)", () => {
         "consolidate_agent",
         "load_agent_context",
         "consult_agent",
+        "learn_skill",
       ]) {
         expect(names, `tool ${n} registered`).toContain(n);
       }
 
-      const created = parse(await client.callTool({ name: "create_agent", arguments: { name: "worker", description: "w" } }));
-      expect(created.success).toBe(true);
-      expect(existsSync(join(vault, "agents", "worker", "SOUL.md"))).toBe(true);
+      // Build the roster: host is linked first and becomes the Active Runtime Agent.
+      const linkHost = parse(await client.callTool({ name: "link_agent", arguments: { name: "host", targets: ["cursor"], projectPath: project } }));
+      expect(linkHost.success).toBe(true);
+      const linkWorker = parse(await client.callTool({ name: "link_agent", arguments: { name: "worker", targets: ["cursor"], projectPath: project } }));
+      expect(linkWorker.success).toBe(true);
 
-      const linked = parse(await client.callTool({ name: "link_agent", arguments: { name: "worker", targets: ["cursor"], projectPath: project } }));
-      expect(linked.success).toBe(true);
-      expect(existsSync(join(project, ".cursor", "rules", "obagents.mdc"))).toBe(true);
+      // Default targeting writes to the Active Runtime Agent (host).
+      const hostUpd = parse(await client.callTool({ name: "update_state", arguments: { type: "build-fixed", summary: "host fixed the login bug" } }));
+      expect(hostUpd.success).toBe(true);
+      expect(memoryContains("host", "login bug")).toBe(true);
 
-      const upd = parse(await client.callTool({ name: "update_state", arguments: { type: "build-fixed", summary: "fixed login bug" } }));
-      expect(upd.success).toBe(true);
-      expect(typeof upd.entryId).toBe("number");
+      // Explicit targetAgent routes to another roster agent (worker).
+      const workerUpd = parse(await client.callTool({ name: "update_state", arguments: { type: "milestone", summary: "worker milestone shipped", targetAgent: "worker" } }));
+      expect(workerUpd.success).toBe(true);
+      expect(memoryContains("worker", "worker milestone shipped")).toBe(true);
 
-      const read = parse(await client.callTool({ name: "read_state", arguments: {} }));
-      expect(typeof read.memory).toBe("string");
+      // read_state routes to the requested agent's compiled state.
+      const workerRead = parse(await client.callTool({ name: "read_state", arguments: { targetAgent: "worker" } }));
+      expect(typeof workerRead.memory).toBe("string");
+      expect(workerRead.memory).toContain("# worker");
+      expect(workerRead.memory).not.toContain("# host");
 
-      const search = parse(await client.callTool({ name: "search_history", arguments: { query: "login" } }));
-      expect(Array.isArray(search.results)).toBe(true);
-      expect(search.results.length).toBeGreaterThan(0);
+      // Default read reflects the active agent (host).
+      const hostRead = parse(await client.callTool({ name: "read_state", arguments: {} }));
+      expect(hostRead.memory).toContain("# host");
+      expect(hostRead.memory).not.toContain("# worker");
 
-      const cons = parse(await client.callTool({ name: "consolidate_agent", arguments: { name: "worker", summary: "worker consolidated" } }));
-      expect(cons.success).toBe(true);
-      expect(readFileSync(getCoreFilePath("worker", "MEMORY.md", project), "utf8")).toContain("worker consolidated");
-
+      // Hive read tools honor the roster.
       const loaded = parse(await client.callTool({ name: "load_agent_context", arguments: { targetAgent: "worker" } }));
       expect(typeof loaded.memory).toBe("string");
 
       const consulted = parse(await client.callTool({ name: "consult_agent", arguments: { targetAgent: "host", query: "login" } }));
       expect(consulted.results.length).toBeGreaterThan(0);
+
+      // Agents outside the roster are rejected with a clear message.
+      const strangerLoad = await client.callTool({ name: "load_agent_context", arguments: { targetAgent: "stranger" } });
+      expect(strangerLoad.isError).toBe(true);
+      expect(JSON.stringify(strangerLoad.content)).toContain("not linked");
+
+      const strangerUpd = await client.callTool({ name: "update_state", arguments: { type: "milestone", summary: "x", targetAgent: "stranger" } });
+      expect(strangerUpd.isError).toBe(true);
+      expect(JSON.stringify(strangerUpd.content)).toContain("not linked");
+
+      // Explicit project routing: worker is also linked to a second project.
+      const linkWorker2 = parse(await client.callTool({ name: "link_agent", arguments: { name: "worker", targets: ["cursor"], projectPath: project2 } }));
+      expect(linkWorker2.success).toBe(true);
+      const routed = parse(await client.callTool({ name: "read_state", arguments: { targetAgent: "worker", project: project2 } }));
+      expect(typeof routed.memory).toBe("string");
+      expect(routed.memory).toContain("# worker");
+
+      // A directory with no linked agents errors with a hint.
+      const unlinked = await client.callTool({ name: "read_state", arguments: { project: project3 } });
+      expect(unlinked.isError).toBe(true);
+      expect(JSON.stringify(unlinked.content)).toContain("No agents are linked");
     });
   });
 
   it("advertises the real supported targets in link_agent", async () => {
-    await withServer("host", project, async (client) => {
+    await withServer(project, async (client) => {
       const tools = await client.listTools();
       const link = tools.tools.find((t) => t.name === "link_agent");
       expect(link, "link_agent tool present").toBeDefined();
@@ -109,4 +151,6 @@ afterAll(() => {
   overrideVaultRoot(null);
   rmSync(vault, { recursive: true, force: true });
   rmSync(project, { recursive: true, force: true });
+  rmSync(project2, { recursive: true, force: true });
+  rmSync(project3, { recursive: true, force: true });
 });

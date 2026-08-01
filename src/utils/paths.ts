@@ -103,6 +103,34 @@ export class PathResolver {
     );
   }
 
+  public getCursorMcpPath(): string {
+    return (
+      this.targetPathOverrides.get("cursor") ??
+      join(this.getHomeDir(), ".cursor", "mcp.json")
+    );
+  }
+
+  public getClaudeCodeMcpPath(): string {
+    return (
+      this.targetPathOverrides.get("claude-code") ??
+      join(this.getHomeDir(), ".claude.json")
+    );
+  }
+
+  public getCopilotMcpPath(): string {
+    return (
+      this.targetPathOverrides.get("copilot") ??
+      join(this.getHomeDir(), ".vscode", "mcp.json")
+    );
+  }
+
+  public getOpenCodeMcpPath(): string {
+    return (
+      this.targetPathOverrides.get("opencode") ??
+      join(this.getHomeDir(), ".config", "opencode", "opencode.json")
+    );
+  }
+
   public reset(): void {
     this.homeDirOverride = null;
     this.targetPathOverrides.clear();

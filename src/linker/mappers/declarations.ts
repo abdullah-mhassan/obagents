@@ -46,7 +46,7 @@ description: OB Agents injected context for OpenCode
 alwaysApply: true
 ---`;
 
-function runCodexMcp(args: string[], cwd: string): Promise<void> {
+export function runCodexMcp(args: string[], cwd: string = process.cwd()): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn("codex", args, { cwd, stdio: "ignore" });
     child.on("error", reject);
@@ -68,7 +68,7 @@ export const DESCRIPTORS: MapperDescriptor[] = [
     frontmatter: CURSOR_FRONTMATTER,
     owned: true,
     mcp: {
-      configPath: (projectDir) => join(projectDir, ".cursor", "mcp.json"),
+      configPath: () => pathResolver.getCursorMcpPath(),
       format: "mcpServers",
     },
   },
@@ -106,7 +106,7 @@ export const DESCRIPTORS: MapperDescriptor[] = [
     name: "GitHub Copilot",
     relativePath: ".github/copilot-instructions.md",
     mcp: {
-      configPath: (projectDir) => join(projectDir, ".vscode", "mcp.json"),
+      configPath: () => pathResolver.getCopilotMcpPath(),
       format: "servers",
     },
   },
@@ -115,7 +115,7 @@ export const DESCRIPTORS: MapperDescriptor[] = [
     name: "Claude Code",
     relativePath: "CLAUDE.md",
     mcp: {
-      configPath: (projectDir) => join(projectDir, ".mcp.json"),
+      configPath: () => pathResolver.getClaudeCodeMcpPath(),
       format: "mcpServers",
     },
     afterWrite: async (projectDir: string, agentName: string, options?: MapperWriteOptions) => {
@@ -151,7 +151,7 @@ export const DESCRIPTORS: MapperDescriptor[] = [
     frontmatter: OPENCODE_FRONTMATTER,
     owned: true,
     mcp: {
-      configPath: (projectDir) => join(projectDir, "opencode.json"),
+      configPath: () => pathResolver.getOpenCodeMcpPath(),
       format: "opencode",
     },
   },
@@ -162,27 +162,16 @@ export const DESCRIPTORS: MapperDescriptor[] = [
     owned: true,
     afterWrite: async (projectDir: string, agentName: string, options?: MapperWriteOptions) => {
       if (!options?.dryRun) {
-        const hash = projectVault.getProjectHash(projectDir);
-        const serverName = `obagents-${agentName}-${hash}`;
-        const normPath = normalizeProjectPath(projectDir);
         const bin = resolveBinaryCommand();
         try {
-          await runCodexMcp(["mcp", "add", serverName, "--", bin, "serve", agentName, "--project", normPath], projectDir);
+          await runCodexMcp(["mcp", "add", "obagents", "--scope", "user", "--", bin, "serve"], projectDir);
         } catch (err) {
           logger.warning(`Codex MCP add failed: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
     },
-    afterClean: async (projectDir: string, options?: MapperCleanOptions) => {
-      if (!options?.dryRun && options?.agentName) {
-        const hash = projectVault.getProjectHash(projectDir);
-        const serverName = `obagents-${options.agentName}-${hash}`;
-        try {
-          await runCodexMcp(["mcp", "remove", serverName], projectDir);
-        } catch (err) {
-          logger.warning(`Codex MCP remove failed: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
+    afterClean: async (_projectDir: string, _options?: MapperCleanOptions) => {
+      // User-scope Codex gateway is preserved when unlinking an agent
     },
   },
   {

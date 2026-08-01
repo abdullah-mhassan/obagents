@@ -27,9 +27,12 @@ export function registerMemoryTools(
   server.tool(
     "read_state",
     "Read the agent's full compiled state (SOUL, MEMORY, and USER).",
-    {},
-    withAgentContext(agentName, "read_state", options, async (_args, _store, servedProject) => {
-      const compiled = await compileAgent(agentName, servedProject);
+    {
+      targetAgent: z.string().optional(),
+      project: z.string().optional(),
+    },
+    withAgentContext(agentName, "read_state", options, async (_args, _store, servedProject, resolvedAgent) => {
+      const compiled = await compileAgent(resolvedAgent, servedProject);
       return { memory: compiled.content };
     }),
   );
@@ -52,11 +55,12 @@ export function registerMemoryTools(
       }),
       supersedes: z.number().int().positive().optional(),
       project: z.string().optional(),
+      targetAgent: z.string().optional(),
     },
-    withAgentContext(agentName, "update_state", options, async ({ type, summary, supersedes, project }, store, servedProject) => {
+    withAgentContext(agentName, "update_state", options, async ({ type, summary, supersedes, project }, store, servedProject, resolvedAgent) => {
       if (!type || !summary) {
         throw new Error(
-          `update_state now requires \`type\` and \`summary\` (as of v${STRUCTURED_MEMORY_VERSION}). Re-run \`obagents sync ${agentName}\` in this project to refresh the tool schema.`,
+          `update_state now requires \`type\` and \`summary\` (as of v${STRUCTURED_MEMORY_VERSION}). Re-run \`obagents sync ${resolvedAgent}\` in this project to refresh the tool schema.`,
         );
       }
 
@@ -68,8 +72,8 @@ export function registerMemoryTools(
 
       if (supersedes !== undefined) {
         const target = store.getEpisode(supersedes);
-        if (!target || target.agent_name !== agentName) {
-          throw new Error(`supersedes: episode #${supersedes} not found for agent "${agentName}".`);
+        if (!target || target.agent_name !== resolvedAgent) {
+          throw new Error(`supersedes: episode #${supersedes} not found for agent "${resolvedAgent}".`);
         }
       }
 
@@ -78,7 +82,7 @@ export function registerMemoryTools(
       const existing = store.findMemoryEpisodeByContent(summary, scopedProject, type);
       if (existing) {
         const status = store.getConsolidationStatus(scopedProject);
-        await setCachedConsolidationStatus(agentName, scopedProject, status.needsConsolidation);
+        await setCachedConsolidationStatus(resolvedAgent, scopedProject, status.needsConsolidation);
         return {
           success: true,
           entryId: existing.id,
@@ -102,7 +106,7 @@ export function registerMemoryTools(
       });
 
       const status = store.getConsolidationStatus(scopedProject);
-      await setCachedConsolidationStatus(agentName, scopedProject, status.needsConsolidation);
+      await setCachedConsolidationStatus(resolvedAgent, scopedProject, status.needsConsolidation);
 
       return {
         success: true,
@@ -121,7 +125,13 @@ export function registerMemoryTools(
   server.tool(
     "search_history",
     "Search the agent's long-term episodic memory via FTS5. Returns ranked episodes matching the query. Results include `superseded_by`; treat entries marked superseded as historical, not current.",
-    { query: z.string(), limit: z.number().optional(), global: z.boolean().optional() },
+    {
+      query: z.string(),
+      limit: z.number().optional(),
+      global: z.boolean().optional(),
+      targetAgent: z.string().optional(),
+      project: z.string().optional(),
+    },
     withAgentContext(agentName, "search_history", options, async ({ query, limit, global }, store, servedProject) => {
       const results = store.search(query, {
         limit: typeof limit === "number" ? limit : 10,
@@ -135,8 +145,13 @@ export function registerMemoryTools(
   server.tool(
     "learn_skill",
     "Save a skill as skills/<name>/SKILL.md inside the agent's vault and record an episode. The skill name must match ^[a-z0-9-_]+$.",
-    { name: z.string(), protocol: z.string() },
-    withAgentContext(agentName, "learn_skill", options, async ({ name, protocol }, store) => {
+    {
+      name: z.string(),
+      protocol: z.string(),
+      targetAgent: z.string().optional(),
+      project: z.string().optional(),
+    },
+    withAgentContext(agentName, "learn_skill", options, async ({ name, protocol }, store, _servedProject, resolvedAgent) => {
       const skillName = name.toLowerCase().replace(SANITIZE_PATTERN, "");
       if (!NAME_PATTERN.test(skillName) || skillName.length === 0) {
         throw new Error(
@@ -144,7 +159,7 @@ export function registerMemoryTools(
         );
       }
 
-      const skillDir = join(getAgentDir(agentName), "skills", skillName);
+      const skillDir = join(getAgentDir(resolvedAgent), "skills", skillName);
       const skillPath = join(skillDir, "SKILL.md");
 
       try {

@@ -23,7 +23,7 @@ function createFakeContext(agentName: string, projectDir: string, compiledConten
       return compiledContent;
     },
     async getAgentMcpConfig() {
-      return { command: "obagents", args: ["serve", agentName] };
+      return { command: "obagents", args: ["serve"] };
     }
   };
 }

@@ -143,7 +143,7 @@ function createFakeContext(agentName: string, pDir: string, compiledContent: str
       return compiledContent;
     },
     async getAgentMcpConfig() {
-      return { command: "obagents", args: ["serve", agentName] };
+      return { command: "obagents", args: ["serve"] };
     }
   };
 }
@@ -281,8 +281,8 @@ describe("command-code mapper", () => {
     expect(content).toContain("brain");
     const mcp = JSON.parse(await readFile(join(projectDir, ".mcp.json"), "utf8"));
     const serverKey = Object.keys(mcp.mcpServers)[0];
-    expect(serverKey).toMatch(/^obagents-agent-/);
-    expect(mcp.mcpServers[serverKey]).toEqual({ command: "obagents", args: ["serve", "agent"] });
+    expect(serverKey).toBe("obagents");
+    expect(mcp.mcpServers[serverKey]).toEqual({ command: "obagents", args: ["serve"] });
   });
 
   it("re-link is idempotent: one block and one MCP entry", async () => {

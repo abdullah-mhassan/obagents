@@ -55,7 +55,7 @@ describe("codex mapper external invocation", () => {
     vi.restoreAllMocks();
   });
 
-  it("spawns codex mcp add with each interpolated value as a single argument", async () => {
+  it("spawns codex mcp add with obagents user-scope registration", async () => {
     const agentName = "dev-agent";
     const context = createFakeContext(agentName, PROJECT);
     spawnMock.mockImplementation(() => spawnExited(0) as any);
@@ -68,31 +68,27 @@ describe("codex mapper external invocation", () => {
       [
         "mcp",
         "add",
-        `obagents-${agentName}-${projectVault.getProjectHash(PROJECT)}`,
+        "obagents",
+        "--scope",
+        "user",
         "--",
         resolveBinaryCommand(),
         "serve",
-        agentName,
-        "--project",
-        normalizeProjectPath(PROJECT),
       ],
       expect.objectContaining({ cwd: PROJECT }),
     );
   });
 
-  it("spawns codex mcp remove with the server name as a single argument on clean", async () => {
+  it("does not spawn codex mcp remove when unlinking an agent from project", async () => {
     const agentName = "dev-agent";
     const context = createFakeContext(agentName, PROJECT);
     spawnMock.mockImplementation(() => spawnExited(0) as any);
 
     await codexMapper.apply(context);
+    spawnMock.mockClear();
     await codexMapper.remove(context, { agentName });
 
-    expect(spawnMock).toHaveBeenLastCalledWith(
-      "codex",
-      ["mcp", "remove", `obagents-${agentName}-${projectVault.getProjectHash(PROJECT)}`],
-      expect.objectContaining({ cwd: PROJECT }),
-    );
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 
   it("executes no external command under dry-run", async () => {

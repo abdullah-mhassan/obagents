@@ -1,6 +1,6 @@
 import type { DatabaseType } from "../../memory/db.js";
 import { MemoryStore } from "../../memory/store.js";
-import { agentExists } from "../../vault/agent.js";
+import { agentExists, validateAgentName } from "../../vault/agent.js";
 import { TOOL_CALL_LOG_SKIP, TOOL_CALL_ARGS_MAX_CHARS, GLOBAL_PROJECT_TAG } from "../../utils/constants.js";
 import { encodeProjectTag } from "../../memory/project-tag.js";
 
@@ -29,6 +29,7 @@ export interface RegisterToolsOptions {
   db?: DatabaseType;
   store?: MemoryStore;
   projectDir?: string;
+  resolveGateway?: (args: { targetAgent?: string; project?: string }) => Promise<{ agent: string; projectDir: string }>;
 }
 
 const SKIP = new Set<string>(TOOL_CALL_LOG_SKIP);
@@ -67,21 +68,42 @@ export function withAgentContext<T>(
   agentName: string,
   toolName: string,
   options: RegisterToolsOptions,
-  handler: (args: T, store: MemoryStore, servedProject?: string) => Promise<unknown>
+  handler: (args: T, store: MemoryStore, servedProject: string | undefined, resolvedAgent: string) => Promise<unknown>
 ): (args: T) => Promise<{ content: ToolContent[]; isError?: true }> {
   return async (args: T) => {
     try {
-      if (!agentExists(agentName)) {
-        return errorResult(`Agent "${agentName}" does not exist.`);
+      const raw = args as Record<string, unknown>;
+      const targetAgent = raw.targetAgent as string | undefined;
+      const peeled = { ...raw } as Record<string, unknown>;
+      delete peeled.targetAgent;
+      let project: string | undefined;
+      if (options.resolveGateway) {
+        project = peeled.project as string | undefined;
+        delete peeled.project;
       }
 
-      const store = options.store ?? new MemoryStore(agentName, options.db ? { db: options.db } : undefined);
+      let agent: string;
+      let servedProject: string | undefined;
+      if (options.resolveGateway) {
+        const resolved = await options.resolveGateway({ targetAgent, project });
+        agent = resolved.agent;
+        servedProject = resolved.projectDir;
+      } else {
+        agent = targetAgent ? validateAgentName(targetAgent) : agentName;
+        servedProject = options.projectDir;
+      }
+
+      if (!agentExists(agent)) {
+        return errorResult(`Agent "${agent}" does not exist.`);
+      }
+
+      const store = options.store ?? new MemoryStore(agent, options.db ? { db: options.db } : undefined);
       try {
-        const result = await handler(args, store, options.projectDir);
-        logToolCall(store, agentName, toolName, args, "ok", options.projectDir);
+        const result = await handler(peeled as T, store, servedProject, agent);
+        logToolCall(store, agent, toolName, args, "ok", servedProject);
         return jsonResult(result);
       } catch (inner) {
-        logToolCall(store, agentName, toolName, args, `error: ${messageOf(inner)}`, options.projectDir);
+        logToolCall(store, agent, toolName, args, `error: ${messageOf(inner)}`, servedProject);
         throw inner;
       } finally {
         if (!options.store) store.close();

@@ -28,7 +28,7 @@ function createFakeContext(agentName: string, projectDir: string, compiledConten
       return `${compiledContent}\n\n## SOUL\n\nPersona details`;
     },
     async getAgentMcpConfig() {
-      return { command: "obagents", args: ["serve", agentName] };
+      return { command: "obagents", args: ["serve"] };
     }
   };
 }
@@ -145,15 +145,20 @@ describe("createMarkdownMapper (generic / AGENT.md)", () => {
   });
 });
 
+import { pathResolver } from "../../src/utils/paths.js";
+const kiloMapper = createMapper(DESCRIPTORS.find((d) => d.key === "kilo")!);
+
 describe("createMarkdownMapper with frontmatter (cursor)", () => {
   let memFS: MemoryFileSystem;
 
   beforeEach(() => {
     memFS = useMemoryFileSystem();
+    pathResolver.setHomeDir("/virtual/home");
   });
 
   afterEach(() => {
     useNodeFileSystem();
+    pathResolver.reset();
   });
 
   it("preserves frontmatter prefix across updates", async () => {
@@ -169,20 +174,45 @@ describe("createMarkdownMapper with frontmatter (cursor)", () => {
     expect(frontmatterCount).toBe(2);
   });
 
-  it("links the MCP server config alongside the markdown", async () => {
+  it("links the global MCP server config for cursor", async () => {
     const context = createFakeContext("agent", PROJECT, "brain");
     await cursorMapper.apply(context);
-    expect(memFS.existsSync(`${PROJECT}/.cursor/mcp.json`)).toBe(true);
-    const mcp = JSON.parse(await memFS.readFile(`${PROJECT}/.cursor/mcp.json`));
-    const serverKey = Object.keys(mcp.mcpServers)[0];
-    expect(serverKey).toMatch(/^obagents-agent-/);
+    const cursorMcpPath = pathResolver.getCursorMcpPath();
+    expect(memFS.existsSync(cursorMcpPath)).toBe(true);
+    const mcp = JSON.parse(await memFS.readFile(cursorMcpPath));
+    expect(mcp.mcpServers.obagents).toEqual({ command: "obagents", args: ["serve"] });
   });
 
-  it("removes the MCP server config on clean", async () => {
+  it("preserves global MCP server config for cursor on agent clean", async () => {
     const context = createFakeContext("agent", PROJECT, "brain");
     await cursorMapper.apply(context);
     await cursorMapper.remove(context, { agentName: "agent" });
-    const mcp = JSON.parse(await memFS.readFile(`${PROJECT}/.cursor/mcp.json`));
-    expect(Object.keys(mcp.mcpServers || {}).some((k) => k.startsWith("obagents-agent-"))).toBe(false);
+    const cursorMcpPath = pathResolver.getCursorMcpPath();
+    const mcp = JSON.parse(await memFS.readFile(cursorMcpPath));
+    expect(mcp.mcpServers.obagents).toBeDefined();
+  });
+});
+
+describe("createMarkdownMcpMapper project-only target (kilo)", () => {
+  let memFS: MemoryFileSystem;
+
+  beforeEach(() => {
+    memFS = useMemoryFileSystem();
+  });
+
+  afterEach(() => {
+    useNodeFileSystem();
+  });
+
+  it("links project MCP server config for kilo and removes it when last agent unlinks", async () => {
+    const context = createFakeContext("agent", PROJECT, "brain");
+    await kiloMapper.apply(context);
+    expect(memFS.existsSync(`${PROJECT}/kilo.json`)).toBe(true);
+    const mcp = JSON.parse(await memFS.readFile(`${PROJECT}/kilo.json`));
+    expect(mcp.mcpServers.obagents).toEqual({ command: "obagents", args: ["serve"] });
+
+    await kiloMapper.remove(context, { agentName: "agent", otherAgentHasTarget: false });
+    const updatedMcp = JSON.parse(await memFS.readFile(`${PROJECT}/kilo.json`));
+    expect(updatedMcp.mcpServers.obagents).toBeUndefined();
   });
 });

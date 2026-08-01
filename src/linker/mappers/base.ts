@@ -185,6 +185,8 @@ function resolveMcpConfigPath(mcp: { configPath: string | ((projectDir: string) 
   return typeof mcp.configPath === "function" ? mcp.configPath(projectDir) : mcp.configPath;
 }
 
+import { isGlobalCapableTarget } from "../../utils/constants.js";
+
 export function createMarkdownMcpMapper(descriptor: MarkdownMcpDescriptor): TargetAdapter {
   const baseMapper = createMarkdownMapper({
     key: descriptor.key,
@@ -228,16 +230,22 @@ export function createMarkdownMcpMapper(descriptor: MarkdownMcpDescriptor): Targ
       const result = await baseMapper.remove(context, options);
 
       if (descriptor.mcp && context.agentName) {
-        const configPath = resolveMcpConfigPath(descriptor.mcp, context.projectDir);
-
-        await manageMcpConfig({
-          agentName: context.agentName,
-          projectDir: context.projectDir,
-          configPath,
-          format: descriptor.mcp.format,
-          action: "unlink",
-          dryRun: options?.dryRun,
-        });
+        const isGlobal = isGlobalCapableTarget(descriptor.key);
+        if (!isGlobal) {
+          const shouldRemoveMcp = options?.forceCleanMcp || !options?.otherAgentHasTarget;
+          if (shouldRemoveMcp) {
+            const configPath = resolveMcpConfigPath(descriptor.mcp, context.projectDir);
+            await manageMcpConfig({
+              agentName: context.agentName,
+              projectDir: context.projectDir,
+              configPath,
+              format: descriptor.mcp.format,
+              action: "unlink",
+              dryRun: options?.dryRun,
+              serverName: "obagents",
+            });
+          }
+        }
       }
 
       if (descriptor.afterClean) {

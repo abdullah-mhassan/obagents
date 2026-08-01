@@ -9,14 +9,14 @@ import type { SupportedTarget } from "../utils/constants.js";
 
 import { resolveBinaryCommand } from "./mcp.js";
 
-export function getAgentMcpConfig(agentName: string, projectDir: string): McpServerConfig {
-  const hash = projectVault.getProjectHash(projectDir);
+export function getAgentMcpConfig(_agentName?: string, _projectDir?: string): McpServerConfig {
   return {
-    name: `obagents-${agentName}-${hash}`,
+    name: "obagents",
     command: resolveBinaryCommand(),
-    args: ["serve", agentName, "--project", normalizeProjectPath(projectDir)],
+    args: ["serve"],
   };
 }
+
 
 export interface TargetApplyOptions {
   rosterAgents?: string[];
@@ -27,6 +27,8 @@ export interface TargetApplyOptions {
 
 export interface TargetRemoveOptions {
   dryRun?: boolean;
+  otherAgentHasTarget?: boolean;
+  forceCleanMcp?: boolean;
 }
 
 export interface TargetApplyResult {
@@ -138,6 +140,8 @@ export class TargetAdapterEngine {
       const removeResult = await adapter.remove(context, {
         dryRun: options?.dryRun,
         agentName,
+        otherAgentHasTarget: options?.otherAgentHasTarget,
+        forceCleanMcp: options?.forceCleanMcp,
       });
 
       results.push({ target: key, key, cleaned: removeResult.cleaned });

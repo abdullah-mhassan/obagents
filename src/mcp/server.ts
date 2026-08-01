@@ -1,36 +1,32 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { VERSION } from "../utils/constants.js";
-import { agentExists } from "../vault/agent.js";
 import { registerTools } from "./index.js";
+import { createGatewayContext } from "./gateway.js";
 
 import { fs } from "../utils/fs.js";
 
-export function createMcpServer(agentName: string, projectDir?: string): McpServer {
-  if (!agentExists(agentName)) {
-    throw new Error(
-      `Agent "${agentName}" does not exist. Run: obagents create ${agentName}`,
-    );
+const GATEWAY_INSTRUCTIONS = `OB Agents Hive Gateway. You are operating in a multi-agent environment managed by OB Agents. This server serves the Hive of a resolved Project: by default the directory this server was started in, overridable via the \`project\` argument on any tool call. The Active Runtime Agent of the resolved Project is the default target for memory tools; to address any other Roster agent pass \`targetAgent\` WITHOUT the leading '@' (e.g. targetAgent: "odba"). Tools reject agents not linked to the resolved Project.`;
+
+export function createGatewayMcpServer(startupProject: string): McpServer {
+  if (!fs.existsSync(startupProject)) {
+    throw new Error(`Project directory "${startupProject}" does not exist on disk.`);
   }
 
-  if (projectDir && !fs.existsSync(projectDir)) {
-    throw new Error(`Project directory "${projectDir}" does not exist on disk.`);
-  }
-
-  const instructions = `Active layer for agent "${agentName}". You are operating in a multi-agent environment managed by OB Agents. If the user @mentions a specific agent, or asks for help from a specific agent, you MUST use the \`load_agent_context\` MCP tool to dynamically retrieve their rules, persona, and memory before responding. Pass the agent name WITHOUT the leading '@' (e.g. targetAgent: "odba").`;
+  const context = createGatewayContext(startupProject);
 
   const server = new McpServer(
     { name: "obagents", version: VERSION },
-    { instructions },
+    { instructions: GATEWAY_INSTRUCTIONS },
   );
 
-  registerTools(server, agentName, { projectDir });
+  registerTools(server, "", { projectDir: startupProject, resolveGateway: context.resolve });
 
   return server;
 }
 
-export async function startMcpServer(agentName: string, projectDir?: string): Promise<void> {
-  const server = createMcpServer(agentName, projectDir);
+export async function startGatewayMcpServer(startupProject: string): Promise<void> {
+  const server = createGatewayMcpServer(startupProject);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

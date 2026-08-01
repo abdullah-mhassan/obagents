@@ -82,3 +82,44 @@ export type SupportedTarget = (typeof SUPPORTED_TARGETS)[number];
 
 export const OBAGENTS_START_PREFIX = "<!-- obagents:start";
 export const OBAGENTS_END_MARKER = "<!-- obagents:end -->";
+
+export const GLOBAL_CAPABLE_TARGETS = [
+  "claude-code",
+  "cursor",
+  "windsurf",
+  "roo",
+  "continue",
+  "copilot",
+  "opencode",
+  "codex",
+  "antigravity",
+] as const;
+export type GlobalCapableTarget = (typeof GLOBAL_CAPABLE_TARGETS)[number];
+
+export const PROJECT_ONLY_TARGETS = [
+  "kilo",
+  "grok",
+  "qwen",
+  "pi",
+  "command-code",
+] as const;
+export type ProjectOnlyTarget = (typeof PROJECT_ONLY_TARGETS)[number];
+
+export const PASSIVE_TARGETS = [
+  "aider",
+  "swe-agent",
+  "generic",
+] as const;
+export type PassiveTarget = (typeof PASSIVE_TARGETS)[number];
+
+export function isGlobalCapableTarget(target: string): boolean {
+  return GLOBAL_CAPABLE_TARGETS.includes(target as GlobalCapableTarget);
+}
+
+export function isProjectOnlyTarget(target: string): boolean {
+  return PROJECT_ONLY_TARGETS.includes(target as ProjectOnlyTarget);
+}
+
+export function isPassiveTarget(target: string): boolean {
+  return PASSIVE_TARGETS.includes(target as PassiveTarget);
+}

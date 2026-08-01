@@ -15,6 +15,7 @@ import { createConsolidateCommand } from "./commands/consolidate.js";
 import { createServeCommand } from "./commands/serve.js";
 import { createActivateCommand } from "./commands/activate.js";
 import { createMemoryCommand } from "./commands/memory.js";
+import { createGatewayCommand } from "./commands/gateway.js";
 
 export function createProgram(): Command {
   const program = new Command();
@@ -37,6 +38,7 @@ export function createProgram(): Command {
   program.addCommand(createServeCommand());
   program.addCommand(createActivateCommand());
   program.addCommand(createMemoryCommand());
+  program.addCommand(createGatewayCommand());
 
   return program;
 }

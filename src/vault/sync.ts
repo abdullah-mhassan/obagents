@@ -159,11 +159,23 @@ export class VaultSyncEngine {
           : remainingAgents[0]
         : undefined;
 
-    let results: Array<{ target: string; key: string; cleaned: boolean }>;
+    let results: Array<{ target: string; key: string; cleaned: boolean }> = [];
     try {
-      results = await this.targetEngine.removeTargets(name, projectDir, targets, {
-        dryRun: options.dryRun,
-      });
+      for (const key of targets) {
+        let otherAgentHasTarget = false;
+        for (const remAgent of remainingAgents) {
+          const remTargets = await this.graph.getTargetsForAgent(remAgent, projectDir);
+          if (remTargets.includes(key as SupportedTarget)) {
+            otherAgentHasTarget = true;
+            break;
+          }
+        }
+        const removeRes = await this.targetEngine.removeTargets(name, projectDir, [key], {
+          dryRun: options.dryRun,
+          otherAgentHasTarget,
+        });
+        results.push(...removeRes);
+      }
 
       if (fallbackAgent) {
         await this.targetEngine.applyTargets(fallbackAgent, projectDir, targets, {

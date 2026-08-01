@@ -1,28 +1,19 @@
 import { Command } from "commander";
-import { startMcpServer } from "../mcp/server.js";
-import { agentExists } from "../vault/agent.js";
-import { sanitizeName } from "./create.js";
+import { startGatewayMcpServer } from "../mcp/server.js";
 import { logger } from "../utils/logger.js";
-import { runCommand, fail } from "./runner.js";
+import { runCommand } from "./runner.js";
 
 export function createServeCommand(): Command {
   const command = new Command("serve");
 
   command
-    .description("Run the MCP stdio server for an agent (Active Layer).")
-    .argument("<agent>", "The name of the agent to serve.")
-    .option("-p, --project <path>", "Project directory to scope memory to (default: current directory).")
+    .description("Run the MCP Hive gateway (Active Layer) for a project.")
+    .option("-p, --project <path>", "Project directory to resolve the Hive from (default: current directory).")
     .action(
-      runCommand(async (providedAgent: string, options: { project?: string }) => {
-        const agent = sanitizeName(providedAgent);
-        if (!agentExists(agent)) {
-          fail(`Agent "${agent}" does not exist. Run: obagents create ${agent}`);
-        }
-
+      runCommand(async (options: { project?: string }) => {
         const projectDir = options.project ?? process.cwd();
-        logger.info(`Starting MCP server for agent "${agent}" (project: ${projectDir})...`);
-
-        await startMcpServer(agent, projectDir);
+        logger.info(`Starting OB Agents Hive gateway (project: ${projectDir})...`);
+        await startGatewayMcpServer(projectDir);
       }),
     );
 

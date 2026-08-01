@@ -9,7 +9,7 @@ import { vaultSyncEngine } from "../../src/vault/sync.js";
 import { parse, stringify } from "yaml";
 
 import { createAgent } from "../../src/vault/agent.js";
-import { overrideVaultRoot } from "../../src/utils/paths.js";
+import { overrideVaultRoot, pathResolver } from "../../src/utils/paths.js";
 
 const genericMapper = createMapper(DESCRIPTORS.find((d) => d.key === "generic")!);
 const PROJECT = "/virtual/project";
@@ -80,17 +80,17 @@ describe("project drift diff", () => {
     expect(targets.every((t) => t.key !== "claude-code")).toBe(true);
   });
 
-  it("validates MCP server registration for MCP targets", async () => {
+  it("validates MCP server registration for global MCP targets (cursor)", async () => {
+    pathResolver.setHomeDir("/virtual/home");
     await seedLinkedProject(["cursor"]);
-    const mcpPath = join(PROJECT, ".cursor", "mcp.json");
+    const mcpPath = pathResolver.getCursorMcpPath();
 
     let res = await diffProject(PROJECT);
     expect(res.targets.find((t) => t.key === "cursor")?.status).toBe("in-sync");
 
     const raw = await fs.readFile(mcpPath, "utf8");
     const mcpConfig = JSON.parse(raw);
-    const serverKey = Object.keys(mcpConfig.mcpServers)[0];
-    mcpConfig.mcpServers[serverKey!].args = ["serve", "wrong-agent"];
+    mcpConfig.mcpServers.obagents.args = ["wrong-arg"];
     await fs.writeFile(mcpPath, JSON.stringify(mcpConfig), "utf8");
 
     res = await diffProject(PROJECT);
@@ -99,6 +99,27 @@ describe("project drift diff", () => {
     await fs.rm(mcpPath, { force: true });
     res = await diffProject(PROJECT);
     expect(res.targets.find((t) => t.key === "cursor")?.status).toBe("missing");
+    pathResolver.reset();
+  });
+
+  it("validates MCP server registration for project-only MCP targets (kilo)", async () => {
+    await seedLinkedProject(["kilo"]);
+    const mcpPath = join(PROJECT, "kilo.json");
+
+    let res = await diffProject(PROJECT);
+    expect(res.targets.find((t) => t.key === "kilo")?.status).toBe("in-sync");
+
+    const raw = await fs.readFile(mcpPath, "utf8");
+    const mcpConfig = JSON.parse(raw);
+    mcpConfig.mcpServers.obagents.args = ["wrong-arg"];
+    await fs.writeFile(mcpPath, JSON.stringify(mcpConfig), "utf8");
+
+    res = await diffProject(PROJECT);
+    expect(res.targets.find((t) => t.key === "kilo")?.status).toBe("drifted");
+
+    await fs.rm(mcpPath, { force: true });
+    res = await diffProject(PROJECT);
+    expect(res.targets.find((t) => t.key === "kilo")?.status).toBe("missing");
   });
 });
 

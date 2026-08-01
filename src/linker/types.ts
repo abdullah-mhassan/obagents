@@ -14,6 +14,8 @@ export interface MapperWriteOptions {
 export interface MapperCleanOptions {
   dryRun?: boolean;
   agentName?: string;
+  otherAgentHasTarget?: boolean;
+  forceCleanMcp?: boolean;
 }
 
 export interface McpServerConfig {
@@ -40,7 +42,10 @@ export interface TargetAdapter {
   readonly name: string;
   readonly key: SupportedTarget;
   apply(context: LinkContext, options?: { dryRun?: boolean; force?: boolean }): Promise<AdapterResult>;
-  remove(context: LinkContext, options?: { dryRun?: boolean; agentName?: string }): Promise<{ cleaned: boolean }>;
+  remove(
+    context: LinkContext,
+    options?: { dryRun?: boolean; agentName?: string; otherAgentHasTarget?: boolean; forceCleanMcp?: boolean },
+  ): Promise<{ cleaned: boolean }>;
   detect(projectDir: string): boolean | Promise<boolean>;
   filePath?(projectDir: string): string;
   checkDrift?(projectDir: string, agentName: string): DriftCheckResult | Promise<DriftCheckResult>;

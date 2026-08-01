@@ -3,12 +3,25 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { MemoryStore } from "../../memory/store.js";
 import { agentExists, createAgent, validateAgentName } from "../../vault/agent.js";
 import { compileAgent } from "../../vault/compiler.js";
-import { vaultSync } from "../../vault/sync.js";
+import { vaultSync, vaultSyncEngine } from "../../vault/sync.js";
 import { consolidateMemory } from "../../memory/consolidation.js";
 import { errorResult, jsonResult, logToolCall, messageOf, type RegisterToolsOptions } from "./utils.js";
 import { SUPPORTED_TARGETS } from "../../utils/constants.js";
 
 import { consultAgentMemory, MEMORY_ONLY_NOTE } from "../../memory/engine.js";
+
+async function resolveLogAgent(
+  servingAgent: string,
+  options: RegisterToolsOptions,
+): Promise<string> {
+  if (!options.resolveGateway) return servingAgent;
+  try {
+    const resolved = await options.resolveGateway({});
+    return resolved.agent;
+  } catch {
+    return servingAgent;
+  }
+}
 
 async function runHiveAction<T>(
   servingAgent: string,
@@ -17,12 +30,13 @@ async function runHiveAction<T>(
   options: RegisterToolsOptions,
   action: () => Promise<unknown>,
 ) {
+  const logAgent = await resolveLogAgent(servingAgent, options);
   try {
     const result = await action();
-    const store = options.store ?? (agentExists(servingAgent) ? new MemoryStore(servingAgent, options.db ? { db: options.db } : undefined) : undefined);
+    const store = options.store ?? (logAgent && agentExists(logAgent) ? new MemoryStore(logAgent, options.db ? { db: options.db } : undefined) : undefined);
     if (store) {
       try {
-        logToolCall(store, servingAgent, toolName, args, "ok", options.projectDir);
+        logToolCall(store, logAgent, toolName, args, "ok", options.projectDir);
       } finally {
         if (!options.store) store.close();
       }
@@ -30,10 +44,10 @@ async function runHiveAction<T>(
     return jsonResult(result);
   } catch (error) {
     const msg = messageOf(error);
-    const store = options.store ?? (agentExists(servingAgent) ? new MemoryStore(servingAgent, options.db ? { db: options.db } : undefined) : undefined);
+    const store = options.store ?? (logAgent && agentExists(logAgent) ? new MemoryStore(logAgent, options.db ? { db: options.db } : undefined) : undefined);
     if (store) {
       try {
-        logToolCall(store, servingAgent, toolName, args, `error: ${msg}`, options.projectDir);
+        logToolCall(store, logAgent, toolName, args, `error: ${msg}`, options.projectDir);
       } finally {
         if (!options.store) store.close();
       }
@@ -93,14 +107,24 @@ export function registerHiveTools(
   server.tool(
     "load_agent_context",
     "Dynamically retrieve another agent's rules, persona, and memory. This is a cheap, memory-only read (no files or web). REQUIRED: targetAgent — the agent name WITHOUT the leading '@' (e.g. targetAgent: \"odba\").",
-    { targetAgent: z.string() },
-    async ({ targetAgent }) => {
+    { targetAgent: z.string(), project: z.string().optional() },
+    async ({ targetAgent, project }) => {
       try {
         const agent = validateAgentName(targetAgent);
         if (!agentExists(agent)) {
           return errorResult(`Agent "${agent}" does not exist.`);
         }
-        const compiled = await compileAgent(agent, options.projectDir);
+        let projectDir: string | undefined;
+        if (options.resolveGateway) {
+          projectDir = (await options.resolveGateway({ project })).projectDir;
+          const roster = await vaultSyncEngine.getAgentsForProject(projectDir);
+          if (!roster.includes(agent)) {
+            return errorResult(`Agent "${agent}" is not linked to project "${projectDir}". Linked agents: ${roster.join(", ")}`);
+          }
+        } else {
+          projectDir = options.projectDir;
+        }
+        const compiled = await compileAgent(agent, projectDir);
         return jsonResult({ memory: compiled.content, note: MEMORY_ONLY_NOTE });
       } catch (error) {
         return errorResult(messageOf(error));
@@ -111,11 +135,21 @@ export function registerHiveTools(
   server.tool(
     "consult_agent",
     "Query another agent's memory deterministically to discover their past decisions. This is the ONLY reliably scoped way to read another agent's memory: a cheap, memory-only lookup scoped to that agent's vault (no files or web) — not task execution; do not escalate to a live sub-agent without user approval. Do NOT substitute a generic search_history, file reads, or web search to find another agent's memory — those aren't scoped to the agent and will miss it. For full rules + memory, use load_agent_context. REQUIRED: targetAgent — the agent name WITHOUT the leading '@' (e.g. targetAgent: \"odba\").",
-    { targetAgent: z.string(), query: z.string(), limit: z.number().optional() },
-    async ({ targetAgent, query, limit }) => {
+    { targetAgent: z.string(), query: z.string(), limit: z.number().optional(), project: z.string().optional() },
+    async ({ targetAgent, query, limit, project }) => {
       try {
         const validated = validateAgentName(targetAgent);
-        const outcome = await consultAgentMemory(validated, query, { limit, projectDir: options.projectDir, store: options.store, db: options.db });
+        let projectDir: string | undefined;
+        if (options.resolveGateway) {
+          projectDir = (await options.resolveGateway({ project })).projectDir;
+          const roster = await vaultSyncEngine.getAgentsForProject(projectDir);
+          if (!roster.includes(validated)) {
+            return errorResult(`Agent "${validated}" is not linked to project "${projectDir}". Linked agents: ${roster.join(", ")}`);
+          }
+        } else {
+          projectDir = options.projectDir;
+        }
+        const outcome = await consultAgentMemory(validated, query, { limit, projectDir, store: options.store, db: options.db });
         return jsonResult(outcome);
       } catch (error) {
         return errorResult(messageOf(error));

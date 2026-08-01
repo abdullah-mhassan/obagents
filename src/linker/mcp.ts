@@ -100,10 +100,9 @@ export async function manageMcpConfig(options: McpInjectionOptions): Promise<voi
     }
   }
 
-  const projectHash = projectVault.getProjectHash(projectDir);
-  const serverName = nameOverride || `obagents-${agentName}-${projectHash}`;
+  const serverName = nameOverride || "obagents";
   const serverCommand = command || resolveBinaryCommand();
-  const serverArgs = args || ["serve", agentName, "--project", normalizeProjectPath(projectDir)];
+  const serverArgs = args || ["serve"];
 
   const adapter = adapters[format];
   if (!adapter) {
