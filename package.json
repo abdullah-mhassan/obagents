@@ -1,0 +1,63 @@
+{
+  "name": "obagents",
+  "version": "0.1.0",
+  "description": "Local-first agent profile manager. Create, list, edit, and delete agent profiles stored in the Vault (~/.obagents).",
+  "type": "module",
+  "bin": {
+    "obagents": "./dist/cli.js",
+    "ob": "./dist/cli.js"
+  },
+  "main": "./dist/cli.js",
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "author": "Abdallah <odba>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/abdullah-mhassan/obagents.git"
+  },
+  "homepage": "https://github.com/abdullah-mhassan/obagents#readme",
+  "bugs": {
+    "url": "https://github.com/abdullah-mhassan/obagents/issues"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "pnpm lint && pnpm typecheck && pnpm test",
+    "smoke": "node scripts/smoke.mjs",
+    "prepublishOnly": "pnpm check && pnpm smoke"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "keywords": [
+    "cli",
+    "agent",
+    "ai",
+    "profile",
+    "vault"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@inquirer/prompts": "^8.5.2",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^12.11.1",
+    "chalk": "^5.4.0",
+    "commander": "^15.0.0",
+    "jsonc-parser": "^3.3.1",
+    "yaml": "^2.9.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.0.0",
+    "oxlint": "^1.74.0",
+    "tsup": "^8.4.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

@@ -1,0 +1,51 @@
+node_modules
+dist
+.DS_Store
+.env
+coverage
+*.log
+
+# Dogfood / Generated IDE Configs & Scratch Directories
+.agents/
+.aider.conf.yml
+.claude/
+.codex/
+.continue/
+.cursor/
+.github/hooks/
+.github/skills/
+.grok/
+.mcp.json
+.obagents-project.json
+.opencode/
+.pi/
+.qwen/
+.roo/
+.scratch/
+.scratch_vault/
+.vscode/
+.windsurfrules
+kilo.json
+opencode.json
+skills-lock.json
+AGENT.md
+AGENTS.md
+CLAUDE.md
+
+# Documentation & Internal Specs (Keep hive.md tracked)
+CHANGELOG.md
+CONTEXT.md
+DESIGN.md
+PRODUCT.md
+docs/*.md
+!docs/hive.md
+!docs/cli-reference.md
+
+# Editor & Build artifacts
+.commandcode/
+.parcel-cache/
+.impeccable/
+
+# Standalone web apps & landing pages
+obagents-landing/
+website/
