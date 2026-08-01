@@ -50,7 +50,7 @@ Inject the compiled agent brain into the target tool's configuration in the curr
 - `-f, --force`: Overwrite conflicting non-OB Agents content.
 
 > **Target Content Modes & MCP Naming**
-> - **MCP Targets:** MCP-capable targets (e.g. `cursor`, `windsurf`, `roo`, `claude-code`, `opencode`, `codex`, `antigravity`, `command-code`, etc.) receive the compact Hive roster and register an explicit project-scoped MCP server named `obagents-<agent>-<projectHash>`.
+> - **MCP Targets:** MCP-capable targets (e.g. `cursor`, `windsurf`, `roo`, `claude-code`, `opencode`, `codex`, `antigravity`, `command-code`, etc.) receive the compact Hive roster and register the single `obagents` global gateway MCP server.
 > - **Passive Targets:** Targets without MCP capabilities (`generic` / `AGENT.md` and `swe-agent` / `swe_agent_instructions.md`) receive the compact Hive roster PLUS the active agent's compiled `SOUL.md`, project-scoped `MEMORY.md`, and `USER.md` content.
 > - **Aider Target:** Linking `aider` ensures the project-scoped `MEMORY.md` file exists prior to configuring `.aider.conf.yml`.
 
@@ -83,13 +83,31 @@ Consolidate overflow working memory into long-term storage/summary.
 
 - `--summary <text>`: Summary text (optional, prompts interactively if omitted).
 
-## MCP Server
+## MCP Server & Gateway
 
-### `obagents serve <agent>`
+### `obagents serve`
 
-Run the MCP stdio server for an agent (Active Layer). Provides project-aware peer context retrieval (`load_agent_context`, `consult_agent`, `update_state`).
+Run the MCP Hive gateway (Active Layer) for a project or environment. Provides dynamic per-call project and agent context resolution across all tools (`load_agent_context`, `consult_agent`, `update_state`, etc.).
 
-- `-p, --project <path>`: Project directory whose memory the agent is scoped to (default: current directory). Registers as `obagents-<agent>-<projectHash>`.
+- `-p, --project <path>`: Project directory to resolve the Hive from (default: current directory).
+
+### `obagents gateway install`
+
+Ensure user-level (global) MCP entries for the `obagents` gateway across all global-capable tools. Automatically cleans up stale per-agent entries.
+
+- `--dry-run`: Show what would be installed without making changes.
+
+### `obagents gateway status`
+
+List registration status of the `obagents` gateway across supported tools (global or project scope).
+
+- `-p, --project <path>`: Project directory to inspect for project-only tools.
+
+### `obagents gateway uninstall`
+
+Remove user-level (global) MCP entries for the `obagents` gateway across all global-capable tools.
+
+- `--dry-run`: Show what would be uninstalled without making changes.
 
 ---
 

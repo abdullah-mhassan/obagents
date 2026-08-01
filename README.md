@@ -26,7 +26,7 @@ OB Agents maintains a single **Vault** for each AI agent's brain — personality
 - **Per-project isolation** — each agent's target integrations and working memory are tracked and scoped per project directory.
 - **Transactional failure-safety** — link/unlink mutations apply target adapters first with automatic rollback on error, and only commit graph metadata on success.
 - **Passive layer** — auto-injects agent state into IDE/CLI config files across 17 targets (Cursor, Windsurf, Roo Code, Continue.dev, GitHub Copilot, Claude Code, Aider, OpenCode, Codex, Kilo, Grok, Qwen, Pi, SWE-Agent, Antigravity, Command Code, and a generic `AGENT.md` fallback). Passive targets receive the full compiled active-agent state — `SOUL`, project-scoped `MEMORY`, and `USER` context.
-- **Active layer** — a live, project-scoped MCP server (`obagents-<agent>-<projectHash>`) for dynamic read/write/search by GUI and CLI tools.
+- **Active layer** — a live, project-aware MCP gateway (`obagents serve`) for dynamic read/write/search by GUI and CLI tools.
 - **Hive orchestration** — spawn, link, and consult sub-agents autonomously via project-aware MCP tools. See the [Hive guide](docs/hive.md).
 - **Deep memory** — a SQLite FTS5 backend tracking historical tasks, skills, and project-scoped memory consolidation.
 
@@ -115,7 +115,8 @@ OB Agents/
 | `obagents sync [agent]` | Re-link an agent across every project it's registered in |
 | `obagents diff` | Show drift between linked files and the freshly compiled state |
 | `obagents consolidate <agent>` | Consolidate overflow working memory into long-term storage |
-| `obagents serve <agent>` | Run the MCP stdio server (Active Layer) |
+| `obagents serve` | Run the MCP stdio server gateway (Active Layer) |
+| `obagents gateway <cmd>` | Manage global MCP registration (`install`, `status`, `uninstall`) |
 | `obagents edit <agent> <file>` | Open soul/memory/user in `$EDITOR` |
 | `obagents activate <agent>` | Set the active runtime agent for the Hive in a project |
 | `obagents delete <agent>` | Delete an agent from the vault entirely |
