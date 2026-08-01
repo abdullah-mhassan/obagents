@@ -4,7 +4,6 @@ import { fs, writeJsonAtomic } from "../utils/fs.js";
 import { getAgentDir } from "../utils/paths.js";
 import { withLock } from "../utils/mutex.js";
 import { CorruptStoreError } from "../utils/errors.js";
-import { DEFAULT_MEMORY_TEMPLATE } from "./triad.js";
 
 export interface ProjectConfig {
   activeAgent?: string;
@@ -124,6 +123,7 @@ export class ProjectVault {
     }
 
     if (!fs.existsSync(memoryFilePath)) {
+      const { DEFAULT_MEMORY_TEMPLATE } = await import("./compiler.js");
       const populated = DEFAULT_MEMORY_TEMPLATE.replaceAll("{{AGENT_NAME}}", agentName);
       await fs.writeFile(memoryFilePath, populated, "utf8");
     }

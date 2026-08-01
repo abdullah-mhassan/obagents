@@ -113,13 +113,13 @@ export class VaultSyncEngine {
     const results: Array<{ target: string; key: string; result: AdapterResult }> = [];
     try {
       for (const key of targets) {
-        const res = await this.targetEngine.applyTargets(name, projectDir, [key], {
+        const res = await this.targetEngine.applyTarget(name, projectDir, key, {
           rosterAgents,
           activeAgent,
           dryRun: options.dryRun,
           force: options.force,
         });
-        results.push(...res);
+        results.push(res);
         appliedTargets.push(key);
       }
     } catch (err) {
@@ -135,7 +135,7 @@ export class VaultSyncEngine {
     }
 
     if (!options.dryRun) {
-      await this.graph.link(name, targets, projectDir, { replace: options.replace });
+      await this.graph.updateLinkState(name, projectDir, targets, "link", { replace: options.replace });
     }
 
     return { agent: name, projectDir, results, warnings };
@@ -170,11 +170,11 @@ export class VaultSyncEngine {
             break;
           }
         }
-        const removeRes = await this.targetEngine.removeTargets(name, projectDir, [key], {
+        const removeRes = await this.targetEngine.removeTarget(name, projectDir, key, {
           dryRun: options.dryRun,
           otherAgentHasTarget,
         });
-        results.push(...removeRes);
+        results.push(removeRes);
       }
 
       if (fallbackAgent) {
@@ -205,7 +205,7 @@ export class VaultSyncEngine {
     }
 
     if (!options.dryRun) {
-      await this.graph.unlink(name, targets, projectDir);
+      await this.graph.updateLinkState(name, projectDir, targets, "unlink");
     }
 
     return { agent: name, projectDir, results };

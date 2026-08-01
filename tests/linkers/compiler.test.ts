@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { createAgent } from "../../src/vault/agent.js";
-import { compileAgent } from "../../src/vault/compiler.js";
+import { compileAgent, compileAgentContext, compileRosterContext } from "../../src/vault/compiler.js";
 import { openDatabase } from "../../src/memory/db.js";
 import { addEpisode } from "../../src/memory/fts.js";
 import { overrideVaultRoot } from "../../src/utils/paths.js";
@@ -121,7 +121,40 @@ describe("compiler", () => {
   });
 
   it("throws on missing agent", async () => {
-    await expect(compileAgent("ghost")).rejects.toThrow(/does not exist/);
+    await expect(compileAgentContext("ghost")).rejects.toThrow(/does not exist/);
+  });
+
+  it("compileAgentContext matches compileAgent behavior", async () => {
+    await createAgent("ctx-agent");
+    const brain1 = await compileAgent("ctx-agent");
+    const brain2 = await compileAgentContext("ctx-agent");
+    expect(brain1).toEqual(brain2);
+  });
+
+  it("compileRosterContext compiles roster string with active and roster agents", async () => {
+    await createAgent("r1");
+    await createAgent("r2");
+    const roster = await compileRosterContext(projectDir, ["r1", "r2"], "r1");
+    expect(roster).toContain("**Active Runtime Agent:** @r1");
+    expect(roster).toContain("@r1");
+    expect(roster).toContain("@r2");
+    expect(roster).toContain("## Hive Protocol");
+  });
+
+  it("appends extraSections cleanly before the runtime protocol section", async () => {
+    await createAgent("extra-agent");
+    const extraSections = [
+      "## Extra Rules\n\n- Rule 1\n- Rule 2",
+      "## Custom Context\n\nCustom details here",
+    ];
+    const compiled = await compileAgentContext("extra-agent", projectDir, { extraSections });
+    expect(compiled.content).toContain("## Extra Rules");
+    expect(compiled.content).toContain("## Custom Context");
+    const extraIndex = compiled.content.indexOf("## Extra Rules");
+    const runtimeIndex = compiled.content.indexOf("## OB Agents Runtime Protocol");
+    const soulIndex = compiled.content.indexOf("## SOUL");
+    expect(soulIndex).toBeLessThan(extraIndex);
+    expect(extraIndex).toBeLessThan(runtimeIndex);
   });
 });
 

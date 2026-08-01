@@ -1,15 +1,7 @@
 import { dirname, join } from "node:path";
 import type { SupportedTarget } from "../../utils/constants.js";
 import type { MapperResult, MapperWriteOptions, MapperCleanOptions, TargetAdapter, LinkContext } from "../types.js";
-import {
-  buildBlock,
-  hasBlock,
-  injectBlock,
-  removeBlock,
-  hasLegacyBlock,
-  hasAgentScopedBlock,
-  removeLegacyBlock,
-} from "../markers.js";
+import { TargetAdapterEngine } from "../engine.js";
 import { fs } from "../../utils/fs.js";
 import type { McpFormat } from "../mcp.js";
 import { manageMcpConfig } from "../mcp.js";
@@ -42,7 +34,7 @@ export function createMarkdownMapper(options: MarkdownMapperOptions): TargetAdap
       const compiledContent = options.passive && context.getPassiveContent
         ? await context.getPassiveContent()
         : await context.getRosterContent();
-      const block = buildBlock(compiledContent, context.agentName);
+      const block = TargetAdapterEngine.buildBlock(compiledContent, context.agentName);
 
       const fileExists = fs.existsSync(filePath);
       let action: MapperResult["action"] = "created";
@@ -67,7 +59,7 @@ export function createMarkdownMapper(options: MarkdownMapperOptions): TargetAdap
       action = blockNeedsReplacement(existing, context.agentName) ? "updated" : "modified";
 
       const updated = modifyPreservingPrefix(existing, prefix, (body) =>
-        injectBlock(body, block, context.agentName),
+        TargetAdapterEngine.injectBlock(body, block, context.agentName),
       );
 
       await fs.writeFile(filePath, ensureTrailingNewline(updated), "utf8");
@@ -81,8 +73,8 @@ export function createMarkdownMapper(options: MarkdownMapperOptions): TargetAdap
         return { cleaned: false };
       }
       const existing = await fs.readFile(filePath, "utf8");
-      const removeLegacy = hasLegacyBlock(existing) && !hasAgentScopedBlock(existing);
-      if (!hasBlock(existing, agentName) && !removeLegacy) {
+      const removeLegacy = TargetAdapterEngine.hasLegacyBlock(existing) && !TargetAdapterEngine.hasAgentScopedBlock(existing);
+      if (!TargetAdapterEngine.hasBlock(existing, agentName) && !removeLegacy) {
         return { cleaned: false };
       }
       if (options.dryRun) {
@@ -94,9 +86,9 @@ export function createMarkdownMapper(options: MarkdownMapperOptions): TargetAdap
       }
       let isEmpty = false;
       const final = modifyPreservingPrefix(existing, prefix, (body) => {
-        let remaining = removeBlock(body, agentName);
+        let remaining = TargetAdapterEngine.removeBlock(body, agentName);
         if (removeLegacy) {
-          remaining = removeLegacyBlock(remaining);
+          remaining = TargetAdapterEngine.removeLegacyBlock(remaining);
         }
         isEmpty = remaining.trim().length === 0;
         return remaining;
@@ -135,11 +127,11 @@ function ensureTrailingNewline(text: string): string {
 }
 
 function blockNeedsReplacement(existing: string, agentName: string): boolean {
-  return hasBlock(existing, agentName) || hasLegacyBlock(existing);
+  return TargetAdapterEngine.hasBlock(existing, agentName) || TargetAdapterEngine.hasLegacyBlock(existing);
 }
 
 function hasOtherBlockOrUserContent(existing: string, agentName: string): boolean {
-  const afterTarget = removeBlock(existing, agentName);
+  const afterTarget = TargetAdapterEngine.removeBlock(existing, agentName);
   return afterTarget.trim().length > 0;
 }
 

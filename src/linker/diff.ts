@@ -1,12 +1,12 @@
 import { join, resolve } from "node:path";
 import { fs } from "../utils/fs.js";
 import { DESCRIPTORS } from "./mappers/declarations.js";
-import { extractBlockContent } from "./markers.js";
 import { vaultSyncEngine } from "../vault/sync.js";
 import { parseJsonc, type McpFormat } from "./mcp.js";
-import { targetAdapterEngine, getAgentMcpConfig } from "./engine.js";
+import { targetAdapterEngine, getAgentMcpConfig, unifiedDiff, type DriftStatus } from "./engine.js";
 
-export type DriftStatus = "in-sync" | "drifted" | "missing";
+export type { DriftStatus };
+export { unifiedDiff };
 
 export interface TargetDrift {
   key: string;
@@ -58,8 +58,6 @@ export async function diffProject(projectDir?: string): Promise<ProjectDrift> {
     const mapperName = descriptor?.name ?? key;
     const adapter = targetAdapterEngine.getAdapter(key);
 
-    let artifactStatus: DriftStatus = "in-sync";
-    let artifactDiff: string | undefined = undefined;
     const filePath = adapter?.filePath
       ? adapter.filePath(dir)
       : descriptor && "relativePath" in descriptor
@@ -67,33 +65,14 @@ export async function diffProject(projectDir?: string): Promise<ProjectDrift> {
         : join(dir, key);
 
     // 1. Check the target's own artifact (markdown block, or adapter-level check for custom mappers)
-    if (descriptor && "custom" in descriptor && descriptor.custom) {
-      if (adapter?.checkDrift) {
-        const result = await adapter.checkDrift(dir, activeAgent);
-        artifactStatus = result.status;
-        artifactDiff = result.diff;
-      }
-    } else if (filePath) {
-      if (!fs.existsSync(filePath)) {
-        artifactStatus = "missing";
-      } else {
-        const contents = await fs.readFile(filePath, "utf8");
-        const actual = extractBlockContent(contents, activeAgent);
-        const { content: expectedBlock } = await targetAdapterEngine.getExpectedContent(
-          activeAgent,
-          dir,
-          key,
-          rosterContext,
-        );
-
-        if (actual === null) {
-          artifactStatus = "missing";
-        } else if (actual !== expectedBlock) {
-          artifactStatus = "drifted";
-          artifactDiff = unifiedDiff(actual, expectedBlock);
-        }
-      }
-    }
+    const artifactResult = await targetAdapterEngine.diffTarget(
+      activeAgent,
+      dir,
+      key,
+      rosterContext,
+    );
+    let artifactStatus: DriftStatus = artifactResult.status;
+    let artifactDiff: string | undefined = artifactResult.diff;
 
     // 2. Check MCP server registration if target uses MCP
     let mcpStatus: DriftStatus = "in-sync";
@@ -183,53 +162,4 @@ export async function fixDrift(projectDir?: string): Promise<FixResult> {
   }
 
   return { projectDir: dir, fixed };
-}
-
-export function unifiedDiff(actual: string, expected: string): string {
-  const a = actual.split("\n");
-  const b = expected.split("\n");
-  const lcs = longestCommonSubsequence(a, b);
-
-  const out: string[] = [];
-  let i = 0;
-  let j = 0;
-  for (const [ai, bj] of lcs) {
-    while (i < ai) out.push(`- ${a[i++]}`);
-    while (j < bj) out.push(`+ ${b[j++]}`);
-    out.push(`  ${a[i]}`);
-    i++;
-    j++;
-  }
-  while (i < a.length) out.push(`- ${a[i++]}`);
-  while (j < b.length) out.push(`+ ${b[j++]}`);
-
-  return out.join("\n");
-}
-
-function longestCommonSubsequence(a: string[], b: string[]): Array<[number, number]> {
-  const n = a.length;
-  const m = b.length;
-  const table: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(m + 1).fill(0));
-
-  for (let i = n - 1; i >= 0; i--) {
-    for (let j = m - 1; j >= 0; j--) {
-      table[i]![j] = a[i] === b[j] ? table[i + 1]![j + 1]! + 1 : Math.max(table[i + 1]![j]!, table[i]![j + 1]!);
-    }
-  }
-
-  const pairs: Array<[number, number]> = [];
-  let i = 0;
-  let j = 0;
-  while (i < n && j < m) {
-    if (a[i] === b[j]) {
-      pairs.push([i, j]);
-      i++;
-      j++;
-    } else if (table[i + 1]![j]! >= table[i]![j + 1]!) {
-      i++;
-    } else {
-      j++;
-    }
-  }
-  return pairs;
 }

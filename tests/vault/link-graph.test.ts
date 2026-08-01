@@ -56,4 +56,68 @@ describe("link-graph ownership", () => {
     expect(await vaultGraph.getAgentsForProject("/no/such/project")).toEqual([]);
     expect(await vaultGraph.getTargetsForAgent("ghost", projectDir)).toEqual([]);
   });
+
+  it("updateLinkState atomically updates Registry, Agent Metadata, and Project Config", async () => {
+    const { readRegistry } = await import("../../src/vault/registry.js");
+    const { getAgentMeta } = await import("../../src/vault/metadata.js");
+    const { getProjectConfig } = await import("../../src/vault/project.js");
+
+    await vaultGraph.updateLinkState("odba", projectDir, ["cursor"], "link");
+
+    const registry = await readRegistry();
+    expect(registry.agents["odba"]?.targets).toContain("cursor");
+
+    const meta = await getAgentMeta("odba");
+    expect(meta?.links).toHaveLength(1);
+    expect(meta?.links[0]?.targets).toEqual(["cursor"]);
+
+    const config = await getProjectConfig(projectDir);
+    expect(config.linkedAgents).toContain("odba");
+
+    await vaultGraph.updateLinkState("odba", projectDir, ["cursor"], "unlink");
+
+    const registryAfter = await readRegistry();
+    expect(registryAfter.agents["odba"]?.targets).not.toContain("cursor");
+
+    const metaAfter = await getAgentMeta("odba");
+    expect(metaAfter?.links).toHaveLength(0);
+
+    const configAfter = await getProjectConfig(projectDir);
+    expect(configAfter.linkedAgents).not.toContain("odba");
+  });
+
+  it("updateLinkState rolls back project config and agent meta when registry write fails", async () => {
+    const { vi } = await import("vitest");
+    const registryModule = await import("../../src/vault/registry.js");
+    const { getProjectConfig } = await import("../../src/vault/project.js");
+    const { getAgentMeta } = await import("../../src/vault/metadata.js");
+
+    const spy = vi.spyOn(registryModule, "updateRegistry").mockRejectedValueOnce(new Error("Registry Write Failure"));
+
+    await expect(
+      vaultGraph.updateLinkState("odba", projectDir, ["cursor"], "link")
+    ).rejects.toThrow("Registry Write Failure");
+
+    const config = await getProjectConfig(projectDir);
+    expect(config.linkedAgents).not.toContain("odba");
+
+    const meta = await getAgentMeta("odba");
+    expect(meta?.links).toHaveLength(0);
+
+    spy.mockRestore();
+  });
+
+  it("updateLinkState safely executes rollback when failure occurs before state capture", async () => {
+    const { vi } = await import("vitest");
+    const projectModule = await import("../../src/vault/project.js");
+
+    const spy = vi.spyOn(projectModule.projectVault, "updateProjectConfig").mockRejectedValueOnce(new Error("Project Lock Error"));
+
+    await expect(
+      vaultGraph.updateLinkState("odba", projectDir, ["cursor"], "link")
+    ).rejects.toThrow("Project Lock Error");
+
+    spy.mockRestore();
+  });
 });
+

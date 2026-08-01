@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { MemoryStore } from "../../memory/store.js";
 import { agentExists, createAgent, validateAgentName } from "../../vault/agent.js";
-import { compileAgent } from "../../vault/compiler.js";
+import { compileAgentContext } from "../../vault/compiler.js";
 import { vaultSync, vaultSyncEngine } from "../../vault/sync.js";
 import { consolidateMemory } from "../../memory/consolidation.js";
 import { errorResult, jsonResult, logToolCall, messageOf, type RegisterToolsOptions } from "./utils.js";
@@ -135,7 +135,7 @@ export function registerHiveTools(
         }
         const { projectDir, error } = await resolveProjectDirAndCheckRoster(agent, project, options);
         if (error) return errorResult(error);
-        const compiled = await compileAgent(agent, projectDir);
+        const compiled = await compileAgentContext(agent, projectDir);
         return jsonResult({ memory: compiled.content, note: MEMORY_ONLY_NOTE });
       } catch (error) {
         return errorResult(messageOf(error));

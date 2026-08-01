@@ -15,7 +15,7 @@ import {
 } from "../../utils/constants.js";
 import { getAgentDir } from "../../utils/paths.js";
 import { encodeProjectTag } from "../../memory/project-tag.js";
-import { compileAgent } from "../../vault/compiler.js";
+import { compileAgentContext } from "../../vault/compiler.js";
 import { setCachedConsolidationStatus } from "../../vault/metadata.js";
 import { withAgentContext, type RegisterToolsOptions } from "./utils.js";
 
@@ -32,7 +32,7 @@ export function registerMemoryTools(
       project: z.string().optional(),
     },
     withAgentContext(agentName, "read_state", options, async (_args, _store, servedProject, resolvedAgent) => {
-      const compiled = await compileAgent(resolvedAgent, servedProject);
+      const compiled = await compileAgentContext(resolvedAgent, servedProject);
       return { memory: compiled.content };
     }),
   );
