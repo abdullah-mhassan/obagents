@@ -40,6 +40,7 @@ PRODUCT.md
 docs/*.md
 !docs/hive.md
 !docs/cli-reference.md
+!docs/release-protocol.md
 
 # Editor & Build artifacts
 .commandcode/
