@@ -1,8 +1,8 @@
 import { dirname } from "node:path";
 import { logger } from "../utils/logger.js";
-import { adapters } from "./adapters/mcp.js";
 import { fs } from "../utils/fs.js";
-import { projectVault, normalizeProjectPath } from "../vault/project.js";
+import { adapters, isStaleObagentsKey, isLegacyMyagentKey } from "./adapters/mcp.js";
+import { resolve } from "node:path";
 
 export type McpFormat = "mcpServers" | "servers" | "array" | "opencode";
 
@@ -124,14 +124,70 @@ export async function manageMcpConfig(options: McpInjectionOptions): Promise<voi
     let skipWrite = false;
     if (rawContent && format in formatJsonPathMap) {
       const formatSpec = formatJsonPathMap[format as keyof typeof formatJsonPathMap];
+      const containerKey = format === "mcpServers" ? "mcpServers" : format === "servers" ? "servers" : "mcp";
+      let currentContent = rawContent;
+
+      if (action === "link") {
+        const root = parseTree(currentContent);
+        if (root) {
+          const containerNode = root.children?.find((n) => n.type === "property" && n.children?.[0]?.value === containerKey);
+          const objNode = containerNode?.children?.[1];
+          if (objNode && objNode.type === "object") {
+            const staleKeys: string[] = [];
+            for (const prop of objNode.children ?? []) {
+              const k = prop.children?.[0]?.value;
+              if (typeof k === "string") {
+                if (isStaleObagentsKey(k)) {
+                  staleKeys.push(k);
+                } else if (isLegacyMyagentKey(k)) {
+                  logger.warning(`Legacy MCP entry "${k}" detected in MCP configuration at ${configPath}. Preserving entry.`);
+                }
+              }
+            }
+            for (const k of staleKeys) {
+              const edits = modify(currentContent, [containerKey, k], undefined, { formattingOptions: JSONC_FORMATTING });
+              currentContent = applyEdits(currentContent, edits);
+            }
+          }
+        }
+      }
+
       const jsonPath = formatSpec.getPath(serverName);
       const newValue = action === "link" ? formatSpec.getValue(serverCommand, serverArgs) : undefined;
-      const edits = modify(rawContent, jsonPath, newValue, { formattingOptions: JSONC_FORMATTING });
-      const outputText = applyEdits(rawContent, edits);
+      const edits = modify(currentContent, jsonPath, newValue, { formattingOptions: JSONC_FORMATTING });
+      const outputText = applyEdits(currentContent, edits);
       await fs.writeFile(configPath, outputText, "utf8");
       writtenWithJsonc = true;
     } else if (rawContent && format === "array") {
-      const arrayNode = findArrayNode(rawContent, "mcpServers");
+      let currentContent = rawContent;
+
+      if (action === "link") {
+        const arrayNode = findArrayNode(currentContent, "mcpServers");
+        if (arrayNode) {
+          const staleIndices: number[] = [];
+          (arrayNode.children ?? []).forEach((el: Node, index: number) => {
+            if (el.type === "object") {
+              const nameProp = el.children?.find((p) => p.type === "property" && p.children?.[0]?.value === "name");
+              const nameVal = nameProp?.children?.[1]?.value;
+              if (typeof nameVal === "string") {
+                if (isStaleObagentsKey(nameVal)) {
+                  staleIndices.push(index);
+                } else if (isLegacyMyagentKey(nameVal)) {
+                  logger.warning(`Legacy MCP entry "${nameVal}" detected in MCP configuration at ${configPath}. Preserving entry.`);
+                }
+              }
+            }
+          });
+
+          for (let i = staleIndices.length - 1; i >= 0; i--) {
+            const idx = staleIndices[i]!;
+            const edits = modify(currentContent, ["mcpServers", idx], undefined, { formattingOptions: JSONC_FORMATTING });
+            currentContent = applyEdits(currentContent, edits);
+          }
+        }
+      }
+
+      const arrayNode = findArrayNode(currentContent, "mcpServers");
       if (arrayNode) {
         const index = findArrayEntryIndex(arrayNode, serverName);
         if (index >= 0 || action === "link") {
@@ -140,8 +196,8 @@ export async function manageMcpConfig(options: McpInjectionOptions): Promise<voi
             action === "link"
               ? { name: serverName, type: "stdio", command: serverCommand, args: serverArgs }
               : undefined;
-          const edits = modify(rawContent, jsonPath, newValue, { formattingOptions: JSONC_FORMATTING });
-          const outputText = applyEdits(rawContent, edits);
+          const edits = modify(currentContent, jsonPath, newValue, { formattingOptions: JSONC_FORMATTING });
+          const outputText = applyEdits(currentContent, edits);
           await fs.writeFile(configPath, outputText, "utf8");
           writtenWithJsonc = true;
         } else {

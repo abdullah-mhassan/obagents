@@ -19,6 +19,31 @@ describe("MCP Format Adapters", () => {
       const result = adapter.retract(config, serverName, "test");
       expect(result.mcpServers[serverName]).toBeUndefined();
     });
+    it("strips stale obagents-* entries and preserves legacy myagent-* and custom entries", () => {
+      const config = {
+        mcpServers: {
+          "obagents-swe-123456": { command: "obagents", args: ["serve"] },
+          "myagent-legacy": { command: "myagent", args: [] },
+          "custom-tool": { command: "custom-tool", args: [] },
+        },
+      };
+      const result = adapter.inject(config, "obagents", command, args);
+      expect(result.mcpServers["obagents-swe-123456"]).toBeUndefined();
+      expect(result.mcpServers["myagent-legacy"]).toEqual({ command: "myagent", args: [] });
+      expect(result.mcpServers["custom-tool"]).toEqual({ command: "custom-tool", args: [] });
+      expect(result.mcpServers["obagents"]).toEqual({ command, args });
+    });
+    it("reports drifted in checkRegistration when stale obagents-* entry is present", () => {
+      const config = {
+        mcpServers: {
+          obagents: { command, args },
+          "obagents-swe-123456": { command, args },
+        },
+      };
+      const res = adapter.checkRegistration(config, "obagents", command, args);
+      expect(res.status).toBe("drifted");
+      expect(res.diff).toContain("obagents-swe-123456");
+    });
   });
 
   describe("servers format (GitHub Copilot)", () => {
@@ -31,6 +56,31 @@ describe("MCP Format Adapters", () => {
       const config = { servers: { [serverName]: { type: "stdio", command, args } } };
       const result = adapter.retract(config, serverName, "test");
       expect(result.servers[serverName]).toBeUndefined();
+    });
+    it("strips stale obagents-* entries and preserves legacy myagent-* and custom entries", () => {
+      const config = {
+        servers: {
+          "obagents-swe-123456": { type: "stdio", command: "obagents", args: ["serve"] },
+          "myagent-legacy": { type: "stdio", command: "myagent", args: [] },
+          "custom-tool": { type: "stdio", command: "custom-tool", args: [] },
+        },
+      };
+      const result = adapter.inject(config, "obagents", command, args);
+      expect(result.servers["obagents-swe-123456"]).toBeUndefined();
+      expect(result.servers["myagent-legacy"]).toEqual({ type: "stdio", command: "myagent", args: [] });
+      expect(result.servers["custom-tool"]).toEqual({ type: "stdio", command: "custom-tool", args: [] });
+      expect(result.servers["obagents"]).toEqual({ type: "stdio", command, args });
+    });
+    it("reports drifted in checkRegistration when stale obagents-* entry is present", () => {
+      const config = {
+        servers: {
+          obagents: { type: "stdio", command, args },
+          "obagents-swe-123456": { type: "stdio", command, args },
+        },
+      };
+      const res = adapter.checkRegistration(config, "obagents", command, args);
+      expect(res.status).toBe("drifted");
+      expect(res.diff).toContain("obagents-swe-123456");
     });
   });
 
@@ -57,6 +107,31 @@ describe("MCP Format Adapters", () => {
       const result = adapter.retract(config, serverName, "test");
       expect(result.mcp[serverName]).toBeUndefined();
     });
+    it("strips stale obagents-* entries and preserves legacy myagent-* and custom entries", () => {
+      const config = {
+        mcp: {
+          "obagents-swe-123456": { type: "local", command: ["obagents", "serve"], cwd: "." },
+          "myagent-legacy": { type: "local", command: ["myagent"], cwd: "." },
+          "custom-tool": { type: "local", command: ["custom-tool"], cwd: "." },
+        },
+      };
+      const result = adapter.inject(config, "obagents", command, args);
+      expect(result.mcp["obagents-swe-123456"]).toBeUndefined();
+      expect(result.mcp["myagent-legacy"]).toEqual({ type: "local", command: ["myagent"], cwd: "." });
+      expect(result.mcp["custom-tool"]).toEqual({ type: "local", command: ["custom-tool"], cwd: "." });
+      expect(result.mcp["obagents"]).toEqual({ type: "local", command: [command, ...args], cwd: "." });
+    });
+    it("reports drifted in checkRegistration when stale obagents-* entry is present", () => {
+      const config = {
+        mcp: {
+          obagents: { type: "local", command: [command, ...args], cwd: "." },
+          "obagents-swe-123456": { type: "local", command: [command, ...args], cwd: "." },
+        },
+      };
+      const res = adapter.checkRegistration(config, "obagents", command, args);
+      expect(res.status).toBe("drifted");
+      expect(res.diff).toContain("obagents-swe-123456");
+    });
   });
 
   describe("array format (Continue)", () => {
@@ -72,6 +147,46 @@ describe("MCP Format Adapters", () => {
       };
       const result = adapter.retract(config, serverName, "test");
       expect(result.mcpServers).toHaveLength(0);
+    });
+    it("strips stale obagents-* entries and preserves legacy myagent-* and custom entries", () => {
+      const config = {
+        mcpServers: [
+          { name: "obagents-swe-123456", type: "stdio", command: "obagents", args: ["serve"] },
+          { name: "myagent-legacy", type: "stdio", command: "myagent", args: [] },
+          { name: "custom-tool", type: "stdio", command: "custom-tool", args: [] },
+        ],
+      };
+      const result = adapter.inject(config, "obagents", command, args);
+      expect(result.mcpServers.find((s: any) => s.name === "obagents-swe-123456")).toBeUndefined();
+      expect(result.mcpServers.find((s: any) => s.name === "myagent-legacy")).toEqual({
+        name: "myagent-legacy",
+        type: "stdio",
+        command: "myagent",
+        args: [],
+      });
+      expect(result.mcpServers.find((s: any) => s.name === "custom-tool")).toEqual({
+        name: "custom-tool",
+        type: "stdio",
+        command: "custom-tool",
+        args: [],
+      });
+      expect(result.mcpServers.find((s: any) => s.name === "obagents")).toEqual({
+        name: "obagents",
+        type: "stdio",
+        command,
+        args,
+      });
+    });
+    it("reports drifted in checkRegistration when stale obagents-* entry is present", () => {
+      const config = {
+        mcpServers: [
+          { name: "obagents", type: "stdio", command, args },
+          { name: "obagents-swe-123456", type: "stdio", command, args },
+        ],
+      };
+      const res = adapter.checkRegistration(config, "obagents", command, args);
+      expect(res.status).toBe("drifted");
+      expect(res.diff).toContain("obagents-swe-123456");
     });
   });
 
