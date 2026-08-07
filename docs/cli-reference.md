@@ -48,6 +48,7 @@ Inject the compiled agent brain into the target tool's configuration in the curr
 - `-t, --target <tool>`: Specific tool to target. Supported targets: `cursor`, `windsurf`, `roo`, `continue`, `copilot`, `claude-code`, `aider`, `generic`, `opencode`, `codex`, `kilo`, `grok`, `qwen`, `pi`, `swe-agent`, `antigravity`, `command-code`.
 - `--dry-run`: Show what would be written without making changes. Enforces a hard no-write contract across graph updates, target files, global settings, MCP registrations, and external CLI hooks.
 - `-f, --force`: Overwrite conflicting non-OB Agents content.
+- `--replace`: Replace the existing target set instead of unioning new targets into it (default link is additive).
 
 > **Target Content Modes & MCP Naming**
 > - **MCP Targets:** MCP-capable targets (e.g. `cursor`, `windsurf`, `roo`, `claude-code`, `opencode`, `codex`, `antigravity`, `command-code`, etc.) receive the compact Hive roster and register the single `obagents` global gateway MCP server.
