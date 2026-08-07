@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createAgent } from "../../src/vault/agent.js";
 import { getAgentMeta } from "../../src/vault/metadata.js";
 import { vaultSyncEngine } from "../../src/vault/sync.js";
-import { overrideVaultRoot } from "../../src/utils/paths.js";
+import { overrideVaultRoot, pathResolver } from "../../src/utils/paths.js";
 
 const linkAgent = vaultSyncEngine.linkAgent.bind(vaultSyncEngine);
 const unlinkAgent = vaultSyncEngine.unlinkAgent.bind(vaultSyncEngine);
@@ -108,6 +108,43 @@ describe("linker orchestrator (integration)", () => {
     await expect(linkAgent("dev", { projectDir: projectA, targets: ["windsurf"] })).rejects.toThrow(
       /core|unlink-only/,
     );
+  });
+
+  it("links Copilot end-to-end and preserves unrelated global .vscode servers", async () => {
+    const { writeFile, mkdir } = await import("node:fs/promises");
+    // Seed a pre-existing, unrelated server in the global ~/.vscode/mcp.json.
+    const vscodeMcp = pathResolver.getCopilotMcpPath();
+    await mkdir(join(vscodeMcp, ".."), { recursive: true });
+    await writeFile(
+      vscodeMcp,
+      JSON.stringify({ servers: { "user-server": { type: "stdio", command: "uvx", args: ["my-tool"] } } }, null, 2),
+      "utf8",
+    );
+
+    // Copilot is a core target: writes its rules file in the project dir…
+    await linkAgent("dev", { projectDir: projectA, targets: ["copilot"] });
+    const copilotRules = await readFile(join(projectA, ".github/copilot-instructions.md"), "utf8");
+    expect(copilotRules).toContain("obagents:start");
+
+    // …and registers an MCP server in the global .vscode/mcp.json without disturbing the user's own server.
+    const afterLink = JSON.parse(await readFile(vscodeMcp, "utf8"));
+    expect(afterLink.servers["user-server"]).toBeDefined();
+    const obEntry = Object.values(afterLink.servers).find(
+      (s: any) => s?.command === "obagents" || s?.command === "ob",
+    );
+    expect(obEntry).toBeDefined();
+
+    // Unlink removes only our project rules file; the global .vscode MCP server
+    // is the persistent gateway entry (like other global-capable tools), and the
+    // unrelated user server is never touched.
+    await unlinkAgent("dev", { projectDir: projectA, targets: ["copilot"] });
+    const afterUnlink = JSON.parse(await readFile(vscodeMcp, "utf8"));
+    const globalOb = Object.values(afterUnlink.servers).find(
+      (s: any) => s?.command === "obagents" || s?.command === "ob",
+    );
+    expect(globalOb).toBeDefined();
+    expect(afterUnlink.servers["user-server"]).toBeDefined();
+    expect(await exists(join(projectA, ".github/copilot-instructions.md"))).toBe(false);
   });
 
   it("links to multiple projects and re-distributes updated content across both", async () => {
