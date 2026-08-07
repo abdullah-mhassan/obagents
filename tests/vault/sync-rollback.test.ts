@@ -31,8 +31,8 @@ describe("VaultSyncEngine rollback failure error handling", () => {
     let calls = 0;
     vi.spyOn(mockTargetEngine, "applyTargets").mockImplementation(async (_name, _dir, targets) => {
       calls++;
-      if (targets[0] === "roo") {
-        throw new Error("Roo application failed");
+      if (targets[0] === "opencode") {
+        throw new Error("Opencode application failed");
       }
       return [{ target: targets[0]!, key: targets[0]!, result: { action: "injected", filePath: "/mock" } }];
     });
@@ -44,10 +44,10 @@ describe("VaultSyncEngine rollback failure error handling", () => {
 
     await expect(
       syncEngine.linkAgent("my-agent", {
-        targets: ["cursor", "roo"],
+        targets: ["cursor", "opencode"],
         projectDir: tmpRoot,
       }),
-    ).rejects.toThrow("Roo application failed");
+    ).rejects.toThrow("Opencode application failed");
 
     expect(mockRemove).toHaveBeenCalledWith("my-agent", tmpRoot, ["cursor"], { dryRun: false });
   });
@@ -57,8 +57,8 @@ describe("VaultSyncEngine rollback failure error handling", () => {
     const mockTargetEngine = new TargetAdapterEngine();
 
     vi.spyOn(mockTargetEngine, "applyTargets").mockImplementation(async (_name, _dir, targets) => {
-      if (targets[0] === "roo") {
-        throw new Error("Roo apply error");
+      if (targets[0] === "opencode") {
+        throw new Error("Opencode apply error");
       }
       return [{ target: targets[0]!, key: targets[0]!, result: { action: "injected", filePath: "/mock" } }];
     });
@@ -71,7 +71,7 @@ describe("VaultSyncEngine rollback failure error handling", () => {
     let caughtError: unknown;
     try {
       await syncEngine.linkAgent("my-agent", {
-        targets: ["cursor", "roo"],
+        targets: ["cursor", "opencode"],
         projectDir: tmpRoot,
       });
     } catch (err) {
@@ -82,7 +82,7 @@ describe("VaultSyncEngine rollback failure error handling", () => {
     const rollbackErr = caughtError as RollbackFailedError;
     expect(rollbackErr.orphanedTargets).toEqual(["cursor"]);
     expect(rollbackErr.projectDir).toBe(tmpRoot);
-    expect(rollbackErr.originalError.message).toBe("Roo apply error");
+    expect(rollbackErr.originalError.message).toBe("Opencode apply error");
     expect(rollbackErr.message).toContain('Run "obagents unlink --target cursor"');
   });
 

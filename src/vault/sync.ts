@@ -4,7 +4,7 @@ import { targetAdapterEngine, TargetAdapterEngine } from "../linker/engine.js";
 import { agentExists } from "./agent.js";
 import { vaultGraph, LinkGraph } from "./link-graph.js";
 import { projectVault } from "./project.js";
-import { SUPPORTED_TARGETS, type SupportedTarget } from "../utils/constants.js";
+import { SUPPORTED_TARGETS, CORE_TARGETS, type SupportedTarget, type CoreTarget } from "../utils/constants.js";
 
 export interface LinkOptions {
   targets?: string[];
@@ -63,6 +63,24 @@ function resolveTargets(explicitTargets?: string[]): string[] {
   );
 }
 
+function resolveLinkingTargets(explicitTargets?: string[]): string[] {
+  if (explicitTargets && explicitTargets.length > 0) {
+    return explicitTargets.map((t) => {
+      validateTarget(t);
+      if (!CORE_TARGETS.includes(t as CoreTarget)) {
+        throw new Error(
+          `Unsupported target "${t}". The verified core targets are: ${CORE_TARGETS.join(", ")}. ` +
+            `This target is unlink-only (legacy).`,
+        );
+      }
+      return t;
+    });
+  }
+  throw new Error(
+    `No target specified. Specify --target <tool>. Supported: ${CORE_TARGETS.join(", ")}.`,
+  );
+}
+
 export class RollbackFailedError extends Error {
   constructor(
     public readonly originalError: Error,
@@ -99,7 +117,7 @@ export class VaultSyncEngine {
     }
 
     const projectDir = resolve(options.projectDir ?? process.cwd());
-    const targets = resolveTargets(options.targets);
+    const targets = resolveLinkingTargets(options.targets);
     const warnings: string[] = [];
 
     const rosterAgents = await this.getAgentsForProject(projectDir);
@@ -312,6 +330,10 @@ export const vaultSync = vaultSyncEngine;
 export const VaultSync = VaultSyncEngine;
 
 export function listSupportedTargets(): readonly string[] {
+  return CORE_TARGETS;
+}
+
+export function listUnlinkTargets(): readonly string[] {
   return SUPPORTED_TARGETS;
 }
 

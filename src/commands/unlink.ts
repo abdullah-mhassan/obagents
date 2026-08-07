@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { resolve } from "node:path";
 import { checkbox } from "@inquirer/prompts";
-import { listSupportedTargets, vaultSyncEngine, RollbackFailedError } from "../vault/sync.js";
+import { listUnlinkTargets, vaultSyncEngine, RollbackFailedError } from "../vault/sync.js";
 import { sanitizeName } from "./create.js";
 import { logger } from "../utils/logger.js";
 import { runCommand, selectAgent, fail } from "./runner.js";
@@ -9,7 +9,7 @@ import { runCommand, selectAgent, fail } from "./runner.js";
 export function createUnlinkCommand(): Command {
   const command = new Command("unlink");
 
-  const supported = listSupportedTargets().join(", ");
+  const supported = listUnlinkTargets().join(", ");
 
   command
     .description("Remove the agent's configuration from the target tool's settings in the current directory.")
@@ -38,7 +38,7 @@ export function createUnlinkCommand(): Command {
         } else {
           const selected = await checkbox({
             message: "Select target tools to unlink:",
-            choices: listSupportedTargets().map((t) => ({ name: t, value: t })),
+            choices: listUnlinkTargets().map((t) => ({ name: t, value: t })),
           });
           if (selected.length === 0) {
             fail("No targets selected.");

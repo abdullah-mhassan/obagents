@@ -94,14 +94,20 @@ describe("linker orchestrator (integration)", () => {
   });
 
   it("unlink preserves user content in shared files", async () => {
-    const shared = join(projectA, ".windsurfrules");
+    const shared = join(projectA, "AGENT.md");
     const { writeFile } = await import("node:fs/promises");
     await writeFile(shared, "user rules\n", "utf8");
-    await linkAgent("dev", { projectDir: projectA, targets: ["windsurf"] });
-    await unlinkAgent("dev", { projectDir: projectA, targets: ["windsurf"] });
+    await linkAgent("dev", { projectDir: projectA, targets: ["generic"] });
+    await unlinkAgent("dev", { projectDir: projectA, targets: ["generic"] });
     const remaining = await readFile(shared, "utf8");
     expect(remaining).toContain("user rules");
     expect(remaining).not.toContain("obagents");
+  });
+
+  it("rejects a non-core (legacy) target as unlink-only", async () => {
+    await expect(linkAgent("dev", { projectDir: projectA, targets: ["windsurf"] })).rejects.toThrow(
+      /core|unlink-only/,
+    );
   });
 
   it("links to multiple projects and re-distributes updated content across both", async () => {

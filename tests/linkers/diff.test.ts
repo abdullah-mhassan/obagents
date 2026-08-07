@@ -7,7 +7,9 @@ import { diffProject, fixDrift, unifiedDiff } from "../../src/linker/diff.js";
 import { createMapper } from "../../src/linker/mappers/base.js";
 import { DESCRIPTORS } from "../../src/linker/mappers/declarations.js";
 import { compileTeamRoster } from "../../src/vault/roster.js";
-import { vaultSyncEngine } from "../../src/vault/sync.js";
+import { vaultSyncEngine, listUnlinkTargets } from "../../src/vault/sync.js";
+import { vaultGraph } from "../../src/vault/link-graph.js";
+import { targetAdapterEngine } from "../../src/linker/engine.js";
 import { parse, stringify } from "yaml";
 
 import { createAgent } from "../../src/vault/agent.js";
@@ -30,6 +32,19 @@ const PROJECT = "/virtual/project";
 
 async function seedLinkedProject(targets: string[] = ["generic"]): Promise<void> {
   await vaultSyncEngine.linkAgent("odba", { targets, projectDir: PROJECT });
+}
+
+// Legacy/non-core targets are unlink-only: they can no longer be linked via
+// linkAgent, but their retained DESCRIPTOR/mapper surface must still be diffable
+// (the unlink-cleanup workflow inspects drift on them). Seed those at the mapper
+// + link-graph level to exercise diff/check-drift without the core link boundary.
+async function seedLinkedGraph(target: string): Promise<void> {
+  await targetAdapterEngine.applyTarget("odba", PROJECT, target, { dryRun: false });
+  await vaultGraph.link("odba", [target], PROJECT);
+}
+
+async function reapplyGraph(target: string): Promise<void> {
+  await targetAdapterEngine.applyTarget("odba", PROJECT, target, { dryRun: false, force: true });
 }
 
 describe("project drift diff", () => {
@@ -121,7 +136,8 @@ describe("project drift diff", () => {
   });
 
   it("validates MCP server registration for project-only MCP targets (kilo)", async () => {
-    await seedLinkedProject(["kilo"]);
+    expect(listUnlinkTargets()).toContain("kilo"); // kilo remains unlink-cleanup-only (legacy)
+    await seedLinkedGraph("kilo");
     const mcpPath = join(PROJECT, "kilo.json");
 
     let res = await diffProject(PROJECT);
@@ -192,7 +208,7 @@ describe("aider drift (artifact-level)", () => {
   const aiderConfigPath = () => join(PROJECT, ".aider.conf.yml");
 
   it("reports in-sync when the aider config read list matches the agent's core paths", async () => {
-    await seedLinkedProject(["aider"]);
+    await seedLinkedGraph("aider");
 
     const { targets } = await diffProject(PROJECT);
     const aider = targets.find((t) => t.key === "aider");
@@ -200,8 +216,8 @@ describe("aider drift (artifact-level)", () => {
     expect(aider?.filePath).toBe(aiderConfigPath());
   });
 
-  it("reports drifted when a core path is removed from the read list and fixDrift repairs it", async () => {
-    await seedLinkedProject(["aider"]);
+  it("reports drifted when a core path is removed from the read list and mapper re-apply repairs it", async () => {
+    await seedLinkedGraph("aider");
     const configPath = aiderConfigPath();
     const parsed = parse(await fs.readFile(configPath, "utf8"));
     parsed.read = (parsed.read as string[]).slice(1);
@@ -211,25 +227,25 @@ describe("aider drift (artifact-level)", () => {
     const drifted = before.targets.find((t) => t.key === "aider");
     expect(drifted?.status).toBe("drifted");
 
-    const { fixed } = await fixDrift(PROJECT);
-    expect(fixed).toContain("aider");
+    // aider is non-core (unlink-only), so fixDrift (which re-links via linkAgent)
+    // is out of scope — but the retained mapper can still re-apply its artifact.
+    await reapplyGraph("aider");
 
     const after = await diffProject(PROJECT);
     expect(after.targets.find((t) => t.key === "aider")?.status).toBe("in-sync");
   });
 
-  it("does not rewrite an in-sync aider config on fixDrift", async () => {
-    await seedLinkedProject(["aider"]);
+  it("does not rewrite an in-sync aider config on mapper re-apply", async () => {
+    await seedLinkedGraph("aider");
     const configPath = aiderConfigPath();
     const before = await fs.readFile(configPath, "utf8");
 
-    const { fixed } = await fixDrift(PROJECT);
-    expect(fixed).not.toContain("aider");
+    await reapplyGraph("aider");
     expect(await fs.readFile(configPath, "utf8")).toBe(before);
   });
 
   it("ignores extra user paths in the read list", async () => {
-    await seedLinkedProject(["aider"]);
+    await seedLinkedGraph("aider");
     const configPath = aiderConfigPath();
     const parsed = parse(await fs.readFile(configPath, "utf8"));
     parsed.read = [...(parsed.read as string[]), "src/notes.md"];

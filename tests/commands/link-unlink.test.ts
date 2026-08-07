@@ -80,7 +80,7 @@ describe("CLI Commands: link and unlink (In-Memory)", () => {
   });
 
   it("unlink --all removes every linked target for the agent", async () => {
-    await linkAgent("dev-agent", { targets: ["cursor", "roo"], dryRun: false, projectDir });
+    await linkAgent("dev-agent", { targets: ["cursor", "generic"], dryRun: false, projectDir });
 
     const origCwd = process.cwd;
     process.cwd = () => projectDir;
@@ -96,7 +96,7 @@ describe("CLI Commands: link and unlink (In-Memory)", () => {
 
     expect(process.exitCode).toBe(0);
     expect(memFS.existsSync(join(projectDir, ".cursor/rules/obagents.mdc"))).toBe(false);
-    expect(memFS.existsSync(join(projectDir, ".roo/rules/00-obagents.md"))).toBe(false);
+    expect(memFS.existsSync(join(projectDir, "AGENT.md"))).toBe(false);
   });
 
   it("unlink --target and --all together is rejected", async () => {

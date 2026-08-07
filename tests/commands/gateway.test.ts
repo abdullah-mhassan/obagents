@@ -55,26 +55,20 @@ describe("obagents gateway commands & global registration", () => {
     const { installed, errors } = await installGateway();
     expect(errors).toHaveLength(0);
     expect(installed).toContain("cursor");
-    expect(installed).toContain("windsurf");
-    expect(installed).toContain("roo");
-    expect(installed).toContain("continue");
     expect(installed).toContain("copilot");
     expect(installed).toContain("claude-code");
     expect(installed).toContain("opencode");
     expect(installed).toContain("antigravity");
     expect(installed).toContain("codex");
 
-    // Verify file contents for cursor, continue, etc.
+    // Non-core/legacy global tools are no longer managed by the gateway.
+    expect(installed).not.toContain("windsurf");
+    expect(installed).not.toContain("roo");
+    expect(installed).not.toContain("continue");
+
+    // Verify file contents for cursor, claude-code, etc.
     const cursorMcp = JSON.parse(await fs.readFile(pathResolver.getCursorMcpPath(), "utf8"));
     expect(cursorMcp.mcpServers.obagents).toEqual({ command: "obagents", args: ["serve"] });
-
-    const continueMcp = JSON.parse(await fs.readFile(pathResolver.getContinueMcpPath(), "utf8"));
-    expect(continueMcp.mcpServers.find((s: any) => s.name === "obagents")).toEqual({
-      name: "obagents",
-      type: "stdio",
-      command: "obagents",
-      args: ["serve"],
-    });
 
     const claudeMcp = JSON.parse(await fs.readFile(pathResolver.getClaudeCodeMcpPath(), "utf8"));
     expect(claudeMcp.mcpServers.obagents).toEqual({ command: "obagents", args: ["serve"] });
@@ -112,23 +106,22 @@ describe("obagents gateway commands & global registration", () => {
     await installGateway();
     const status = await getGatewayStatus("/virtual/project");
 
-    expect(status).toHaveLength(17);
+    expect(status).toHaveLength(7);
     const cursorStatus = status.find((s) => s.key === "cursor");
     expect(cursorStatus?.status).toBe("registered");
     expect(cursorStatus?.global).toBe(true);
 
-    const kiloStatus = status.find((s) => s.key === "kilo");
-    expect(kiloStatus?.status).toBe("missing");
-    expect(kiloStatus?.global).toBe(false);
+    // Non-core/legacy tools (e.g. kilo) do NOT appear in the core gateway status list.
+    expect(status.find((s) => s.key === "kilo")).toBeUndefined();
   });
 
-  it("linkAgent auto-ensures user-level MCP registration for global tools and project config for project-only tools", async () => {
+  it("linkAgent auto-ensures user-level MCP registration for global tools and project config for project-scoped core targets", async () => {
     spawnMock.mockImplementation(() => spawnExited(0) as any);
     await createAgent("dev");
 
     const projectDir = "/virtual/project";
     await vaultSyncEngine.linkAgent("dev", {
-      targets: ["cursor", "kilo"],
+      targets: ["cursor", "generic"],
       projectDir,
     });
 
@@ -136,44 +129,45 @@ describe("obagents gateway commands & global registration", () => {
     const cursorMcp = JSON.parse(await fs.readFile(pathResolver.getCursorMcpPath(), "utf8"));
     expect(cursorMcp.mcpServers.obagents).toBeDefined();
 
-    // Project-only tool (kilo) wrote to project dir
-    const kiloMcp = JSON.parse(await fs.readFile(`${projectDir}/kilo.json`, "utf8"));
-    expect(kiloMcp.mcpServers.obagents).toBeDefined();
+    // Project-scoped core target (generic) wrote to project dir (AGENT.md)
+    const agentMd = await fs.readFile(`${projectDir}/AGENT.md`, "utf8");
+    expect(agentMd).toContain("obagents:start");
 
-    // Unlinking dev removes kilo MCP (last agent), but retains cursor global MCP
+    // Unlinking dev removes the generic AGENT.md (last agent), but retains cursor global MCP
     await vaultSyncEngine.unlinkAgent("dev", {
-      targets: ["cursor", "kilo"],
+      targets: ["cursor", "generic"],
       projectDir,
     });
 
     const cursorMcpAfter = JSON.parse(await fs.readFile(pathResolver.getCursorMcpPath(), "utf8"));
     expect(cursorMcpAfter.mcpServers.obagents).toBeDefined();
 
-    const kiloMcpAfter = JSON.parse(await fs.readFile(`${projectDir}/kilo.json`, "utf8"));
-    expect(kiloMcpAfter.mcpServers.obagents).toBeUndefined();
+    await expect(fs.readFile(`${projectDir}/AGENT.md`, "utf8")).rejects.toThrow();
   });
 
-  it("linking multiple agents to a project produces at most one obagents entry per tool", async () => {
+  it("linking multiple agents to a project produces at most one obagents file per tool", async () => {
     spawnMock.mockImplementation(() => spawnExited(0) as any);
     await createAgent("agent1");
     await createAgent("agent2");
 
     const projectDir = "/virtual/project";
-    await vaultSyncEngine.linkAgent("agent1", { targets: ["kilo"], projectDir });
-    await vaultSyncEngine.linkAgent("agent2", { targets: ["kilo"], projectDir });
+    await vaultSyncEngine.linkAgent("agent1", { targets: ["generic"], projectDir });
+    await vaultSyncEngine.linkAgent("agent2", { targets: ["generic"], projectDir });
 
-    const kiloMcp = JSON.parse(await fs.readFile(`${projectDir}/kilo.json`, "utf8"));
-    expect(Object.keys(kiloMcp.mcpServers)).toEqual(["obagents"]);
+    // Both agents share the generic adapter's single AGENT.md roster.
+    const md = await fs.readFile(`${projectDir}/AGENT.md`, "utf8");
+    expect(md).toContain("@agent1");
+    expect(md).toContain("@agent2");
 
-    // Unlink agent1 -> agent2 still linked to kilo -> obagents MCP entry remains
-    await vaultSyncEngine.unlinkAgent("agent1", { targets: ["kilo"], projectDir });
-    const kiloMcpMid = JSON.parse(await fs.readFile(`${projectDir}/kilo.json`, "utf8"));
-    expect(kiloMcpMid.mcpServers.obagents).toBeDefined();
+    // Unlink agent1 -> agent2 still linked to generic -> AGENT.md roster remains
+    await vaultSyncEngine.unlinkAgent("agent1", { targets: ["generic"], projectDir });
+    const mdMid = await fs.readFile(`${projectDir}/AGENT.md`, "utf8");
+    expect(mdMid).toContain("@agent2");
+    expect(mdMid).not.toContain("@agent1");
 
-    // Unlink agent2 -> no linked agents left -> obagents MCP entry removed
-    await vaultSyncEngine.unlinkAgent("agent2", { targets: ["kilo"], projectDir });
-    const kiloMcpFinal = JSON.parse(await fs.readFile(`${projectDir}/kilo.json`, "utf8"));
-    expect(kiloMcpFinal.mcpServers.obagents).toBeUndefined();
+    // Unlink agent2 -> no linked agents left -> AGENT.md is removed
+    await vaultSyncEngine.unlinkAgent("agent2", { targets: ["generic"], projectDir });
+    await expect(fs.readFile(`${projectDir}/AGENT.md`, "utf8")).rejects.toThrow();
   });
 
   it("CLI obagents gateway subcommands execute cleanly", async () => {

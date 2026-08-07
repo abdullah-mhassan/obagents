@@ -80,6 +80,17 @@ export const SUPPORTED_TARGETS = [
 ] as const;
 export type SupportedTarget = (typeof SUPPORTED_TARGETS)[number];
 
+export const CORE_TARGETS = [
+  "claude-code",
+  "cursor",
+  "codex",
+  "opencode",
+  "antigravity",
+  "copilot",
+  "generic",
+] as const;
+export type CoreTarget = (typeof CORE_TARGETS)[number];
+
 export const OBAGENTS_START_PREFIX = "<!-- obagents:start";
 export const OBAGENTS_END_MARKER = "<!-- obagents:end -->";
 

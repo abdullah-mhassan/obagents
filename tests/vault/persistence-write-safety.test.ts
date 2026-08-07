@@ -142,7 +142,7 @@ describe("Persistence write-safety: serialized read-modify-write", () => {
 
     await Promise.all([
       vaultGraph.link("multi-link", ["generic"], PROJ_A),
-      vaultGraph.link("multi-link", ["windsurf"], PROJ_B),
+      vaultGraph.link("multi-link", ["cursor"], PROJ_B),
     ]);
 
     const projects = await vaultGraph.getProjectsForAgent("multi-link");

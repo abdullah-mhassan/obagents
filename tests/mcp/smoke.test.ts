@@ -9,7 +9,7 @@ import { createAgent } from "../../src/vault/agent.js";
 import { overrideVaultRoot } from "../../src/utils/paths.js";
 import { openDatabase } from "../../src/memory/db.js";
 import { searchHistory } from "../../src/memory/fts.js";
-import { SUPPORTED_TARGETS } from "../../src/utils/constants.js";
+import { CORE_TARGETS } from "../../src/utils/constants.js";
 
 const vault = mkdtempSync(join(tmpdir(), "obagents-mcp-"));
 const project = mkdtempSync(join(tmpdir(), "obagents-proj-"));
@@ -142,7 +142,7 @@ describe("MCP Hive gateway day-in-life (in-process client)", () => {
       const match = desc.match(/Valid targets: \[([^\]]+)\]\./);
       expect(match, "description lists valid targets").not.toBeNull();
       const advertised = match![1].split(",").map((s) => s.trim());
-      expect(advertised.sort()).toEqual([...SUPPORTED_TARGETS].sort());
+      expect(advertised.sort()).toEqual([...CORE_TARGETS].sort());
     });
   });
 });

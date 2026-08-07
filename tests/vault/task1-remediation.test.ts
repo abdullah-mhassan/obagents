@@ -76,13 +76,13 @@ describe("Task 1 Sequential Remediation: Per-project target mapping & migration"
     await createAgent("multi-agent");
 
     await vaultGraph.link("multi-agent", ["cursor"], PROJ_A);
-    await vaultGraph.link("multi-agent", ["windsurf"], PROJ_B);
+    await vaultGraph.link("multi-agent", ["cursor"], PROJ_B);
 
     const targetsA = await vaultGraph.getTargetsForAgent("multi-agent", PROJ_A);
     const targetsB = await vaultGraph.getTargetsForAgent("multi-agent", PROJ_B);
 
     expect(targetsA).toEqual(["cursor"]);
-    expect(targetsB).toEqual(["windsurf"]);
+    expect(targetsB).toEqual(["cursor"]);
 
     const projects = await vaultGraph.getProjectsForAgent("multi-agent");
     expect(projects).toEqual([PROJ_A, PROJ_B]);
@@ -122,7 +122,7 @@ describe("Task 1 Sequential Remediation: Per-project target mapping & migration"
     await createAgent("sync-agent");
 
     await linkAgent("sync-agent", { targets: ["generic"], projectDir: PROJ_A });
-    await linkAgent("sync-agent", { targets: ["windsurf"], projectDir: PROJ_B });
+    await linkAgent("sync-agent", { targets: ["cursor"], projectDir: PROJ_B });
 
     const syncResult = await syncAgentAcrossProjects("sync-agent");
     expect(syncResult.status).toBe("success");
@@ -131,14 +131,14 @@ describe("Task 1 Sequential Remediation: Per-project target mapping & migration"
     const targetsB = await vaultGraph.getTargetsForAgent("sync-agent", PROJ_B);
 
     expect(targetsA).toEqual(["generic"]);
-    expect(targetsB).toEqual(["windsurf"]);
+    expect(targetsB).toEqual(["cursor"]);
   });
 
   it("ensures activation uses only current-project targets", async () => {
     await createAgent("act-agent");
 
     await linkAgent("act-agent", { targets: ["generic"], projectDir: PROJ_A });
-    await linkAgent("act-agent", { targets: ["windsurf"], projectDir: PROJ_B });
+    await linkAgent("act-agent", { targets: ["cursor"], projectDir: PROJ_B });
 
     await vaultGraph.setActiveAgentForProject(PROJ_A, "act-agent");
     const active = await vaultGraph.getActiveAgentForProject(PROJ_A);
@@ -146,7 +146,7 @@ describe("Task 1 Sequential Remediation: Per-project target mapping & migration"
 
     const activeTargets = await vaultGraph.getTargetsForAgent(active!, PROJ_A);
     expect(activeTargets).toEqual(["generic"]);
-    expect(activeTargets).not.toContain("windsurf");
+    expect(activeTargets).not.toContain("cursor");
   });
 
   describe("Transactional failure-safety & deletion redesign", () => {

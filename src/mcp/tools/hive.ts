@@ -6,7 +6,7 @@ import { compileAgentContext } from "../../vault/compiler.js";
 import { vaultSync, vaultSyncEngine } from "../../vault/sync.js";
 import { consolidateMemory } from "../../memory/consolidation.js";
 import { errorResult, jsonResult, logToolCall, messageOf, type RegisterToolsOptions } from "./utils.js";
-import { SUPPORTED_TARGETS } from "../../utils/constants.js";
+import { CORE_TARGETS } from "../../utils/constants.js";
 
 import { consultAgentMemory, MEMORY_ONLY_NOTE } from "../../memory/engine.js";
 
@@ -96,7 +96,7 @@ export function registerHiveTools(
 
   server.tool(
     "link_agent",
-    `Assign an existing agent to a specific project workspace. This injects the agent's context into the project. projectPath defaults to the current working directory if omitted. Valid targets: [${SUPPORTED_TARGETS.join(", ")}].`,
+    `Assign an existing agent to a specific project workspace. This injects the agent's context into the project. projectPath defaults to the current working directory if omitted. Valid targets: [${CORE_TARGETS.join(", ")}].`,
     { name: z.string(), targets: z.array(z.string()), projectPath: z.string().optional() },
     async ({ name, targets, projectPath }) => {
       return runHiveAction(agentName, "link_agent", { name, targets, projectPath }, options, async () => {

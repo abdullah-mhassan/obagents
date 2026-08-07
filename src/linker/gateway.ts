@@ -2,7 +2,9 @@ import { fs } from "../utils/fs.js";
 import { logger } from "../utils/logger.js";
 import {
   GLOBAL_CAPABLE_TARGETS,
+  CORE_TARGETS,
   type SupportedTarget,
+  type CoreTarget,
 } from "../utils/constants.js";
 import { DESCRIPTORS } from "./mappers/declarations.js";
 import { manageMcpConfig, parseJsonc, resolveBinaryCommand } from "./mcp.js";
@@ -24,7 +26,10 @@ export async function installGateway(options?: { dryRun?: boolean }): Promise<{ 
   const bin = resolveBinaryCommand();
 
   for (const descriptor of DESCRIPTORS) {
-    if (!GLOBAL_CAPABLE_TARGETS.includes(descriptor.key as any)) {
+    if (
+      !CORE_TARGETS.includes(descriptor.key as CoreTarget) ||
+      !GLOBAL_CAPABLE_TARGETS.includes(descriptor.key as never)
+    ) {
       continue;
     }
 
@@ -81,7 +86,10 @@ export async function uninstallGateway(options?: { dryRun?: boolean }): Promise<
   const errors: string[] = [];
 
   for (const descriptor of DESCRIPTORS) {
-    if (!GLOBAL_CAPABLE_TARGETS.includes(descriptor.key as any)) {
+    if (
+      !CORE_TARGETS.includes(descriptor.key as CoreTarget) ||
+      !GLOBAL_CAPABLE_TARGETS.includes(descriptor.key as never)
+    ) {
       continue;
     }
 
@@ -139,7 +147,10 @@ export async function getGatewayStatus(projectDir?: string): Promise<GatewayStat
 
   for (const descriptor of DESCRIPTORS) {
     const key = descriptor.key;
-    const isGlobal = GLOBAL_CAPABLE_TARGETS.includes(key as any);
+    if (!CORE_TARGETS.includes(key as CoreTarget)) {
+      continue;
+    }
+    const isGlobal = GLOBAL_CAPABLE_TARGETS.includes(key as never);
 
     if (key === "codex") {
       let isReg = false;
