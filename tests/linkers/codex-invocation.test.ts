@@ -115,7 +115,8 @@ describe("codex mapper external invocation", () => {
     expect(spawnMock).not.toHaveBeenCalled();
   });
 
-  it("warns and keeps going when the codex command fails", async () => {
+  it("fails loudly when the codex MCP registration command fails", async () => {
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
     const warningSpy = vi.spyOn(logger, "warning").mockImplementation(() => {});
     const context = createFakeContext("dev-agent", PROJECT);
     spawnMock.mockImplementation(() => {
@@ -124,11 +125,16 @@ describe("codex mapper external invocation", () => {
       return child as any;
     });
 
-    await expect(codexMapper.apply(context)).resolves.toBeDefined();
-    expect(warningSpy).toHaveBeenCalledWith(expect.stringContaining("Codex MCP add failed"));
+    await expect(codexMapper.apply(context)).rejects.toThrow(
+      /Codex MCP registration failed/,
+    );
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Codex MCP registration failed"),
+    );
+    expect(warningSpy).not.toHaveBeenCalled();
   });
 
-  it("does not treat a failing codex command as a fatal link error", async () => {
+  it("treats a failing codex command as a fatal link error", async () => {
     const context = createFakeContext("dev-agent", PROJECT);
     spawnMock.mockImplementation(() => {
       const child = new EventEmitter();
@@ -136,6 +142,8 @@ describe("codex mapper external invocation", () => {
       return child as any;
     });
 
-    await expect(codexMapper.apply(context)).resolves.toBeDefined();
+    await expect(codexMapper.apply(context)).rejects.toThrow(
+      /Codex MCP registration failed/,
+    );
   });
 });

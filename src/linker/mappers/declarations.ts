@@ -171,7 +171,10 @@ export const DESCRIPTORS: MapperDescriptor[] = [
           );
           await runCodexMcp(args, projectDir);
         } catch (err) {
-          logger.warning(`Codex MCP add failed: ${err instanceof Error ? err.message : String(err)}`);
+          const msg =
+            err instanceof Error ? err.message : String(err);
+          logger.error(`Codex MCP registration failed: ${msg}`);
+          throw new Error(`Codex MCP registration failed: ${msg}`);
         }
       }
     },
