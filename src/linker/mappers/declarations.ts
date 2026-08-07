@@ -1,11 +1,11 @@
 import { dirname, join } from "node:path";
-import { spawn } from "node:child_process";
 import type { MapperWriteOptions, MapperCleanOptions } from "../types.js";
 import type { MapperDescriptor } from "./base.js";
 import { fs } from "../../utils/fs.js";
 import { getClaudeSettingsPath, pathResolver } from "../../utils/paths.js";
 import { logger } from "../../utils/logger.js";
 import { aiderDescriptor } from "./aider.js";
+import { codexMcpArgs, runCodexCapture } from "../codex-cli.js";
 
 import { parseJsonc, resolveBinaryCommand } from "../mcp.js";
 
@@ -45,18 +45,11 @@ description: OB Agents injected context for OpenCode
 alwaysApply: true
 ---`;
 
-export function runCodexMcp(args: string[], cwd: string = process.cwd()): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn("codex", args, { cwd, stdio: "ignore" });
-    child.on("error", reject);
-    child.on("exit", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`codex exited with code ${code}`));
-      }
-    });
-  });
+export async function runCodexMcp(
+  args: string[],
+  cwd: string = process.cwd(),
+): Promise<void> {
+  await runCodexCapture(args, cwd);
 }
 
 export const DESCRIPTORS: MapperDescriptor[] = [
@@ -161,7 +154,8 @@ export const DESCRIPTORS: MapperDescriptor[] = [
     owned: true,
     checkDrift: async (projectDir: string) => {
       try {
-        await runCodexMcp(["mcp", "get", "obagents", "--scope", "user"], projectDir);
+        const args = await codexMcpArgs(["mcp", "get", "obagents"], projectDir);
+        await runCodexMcp(args, projectDir);
         return { status: "in-sync" };
       } catch {
         return { status: "missing", diff: "Codex MCP server 'obagents' is not registered" };
@@ -171,7 +165,11 @@ export const DESCRIPTORS: MapperDescriptor[] = [
       if (!options?.dryRun) {
         const bin = resolveBinaryCommand();
         try {
-          await runCodexMcp(["mcp", "add", "obagents", "--scope", "user", "--", bin, "serve"], projectDir);
+          const args = await codexMcpArgs(
+            ["mcp", "add", "obagents", "--", bin, "serve"],
+            projectDir,
+          );
+          await runCodexMcp(args, projectDir);
         } catch (err) {
           logger.warning(`Codex MCP add failed: ${err instanceof Error ? err.message : String(err)}`);
         }

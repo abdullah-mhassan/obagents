@@ -8,6 +8,7 @@ import { DESCRIPTORS } from "./mappers/declarations.js";
 import { manageMcpConfig, parseJsonc, resolveBinaryCommand } from "./mcp.js";
 import { adapters } from "./adapters/mcp.js";
 import { runCodexMcp } from "./mappers/declarations.js";
+import { codexMcpArgs } from "./codex-cli.js";
 import { resolve } from "node:path";
 
 export interface GatewayStatusItem {
@@ -30,7 +31,8 @@ export async function installGateway(options?: { dryRun?: boolean }): Promise<{ 
     if (descriptor.key === "codex") {
       if (!options?.dryRun) {
         try {
-          await runCodexMcp(["mcp", "add", "obagents", "--scope", "user", "--", bin, "serve"]);
+          const args = await codexMcpArgs(["mcp", "add", "obagents", "--", bin, "serve"]);
+          await runCodexMcp(args);
           installed.push("codex");
         } catch (err) {
           const msg = `Codex MCP add failed: ${err instanceof Error ? err.message : String(err)}`;
@@ -86,7 +88,8 @@ export async function uninstallGateway(options?: { dryRun?: boolean }): Promise<
     if (descriptor.key === "codex") {
       if (!options?.dryRun) {
         try {
-          await runCodexMcp(["mcp", "remove", "obagents", "--scope", "user"]);
+          const args = await codexMcpArgs(["mcp", "remove", "obagents"]);
+          await runCodexMcp(args);
           uninstalled.push("codex");
         } catch (err) {
           const msg = `Codex MCP remove failed: ${err instanceof Error ? err.message : String(err)}`;
@@ -141,7 +144,8 @@ export async function getGatewayStatus(projectDir?: string): Promise<GatewayStat
     if (key === "codex") {
       let isReg = false;
       try {
-        await runCodexMcp(["mcp", "get", "obagents", "--scope", "user"], dir);
+        const args = await codexMcpArgs(["mcp", "get", "obagents"], dir);
+        await runCodexMcp(args, dir);
         isReg = true;
       } catch {
         isReg = false;

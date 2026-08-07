@@ -8,6 +8,7 @@ import { projectVault, normalizeProjectPath } from "../../src/vault/project.js";
 import { useMemoryFileSystem, useNodeFileSystem, MemoryFileSystem } from "../../src/utils/fs.js";
 import { logger } from "../../src/utils/logger.js";
 import type { LinkContext } from "../../src/linker/types.js";
+import { __resetCodexSpawn } from "../../src/linker/codex-cli.js";
 
 vi.mock("node:child_process", () => ({
   spawn: vi.fn(),
@@ -38,8 +39,16 @@ function createFakeContext(agentName: string, projectDir: string): LinkContext {
 
 function spawnExited(code: number): EventEmitter {
   const child = new EventEmitter();
+  // Advertise `--scope` so the codex scope probe detects support and the
+  // registration call carries the user-scope args this suite asserts.
+  (child as any).stdout = {
+    [Symbol.asyncIterator]: async function* () {
+      yield Buffer.from("--scope <scope>  the scope to register the server under\n");
+    },
+  };
+  (child as any).stderr = null;
   queueMicrotask(() => child.emit("exit", code));
-  return child;
+  return <EventEmitter & { stderr: unknown }>child;
 }
 
 describe("codex mapper external invocation", () => {
@@ -48,6 +57,7 @@ describe("codex mapper external invocation", () => {
   beforeEach(() => {
     memFS = useMemoryFileSystem();
     spawnMock.mockReset();
+    __resetCodexSpawn();
   });
 
   afterEach(() => {
@@ -62,7 +72,12 @@ describe("codex mapper external invocation", () => {
 
     await codexMapper.apply(context);
 
-    expect(spawnMock).toHaveBeenCalledTimes(1);
+    // The scope-probe (`codex mcp add --help`) spawns first; the registration
+    // spawn follows. Only the second call carries the user-scope registration.
+    expect(spawnMock).toHaveBeenCalledTimes(2);
+    expect(spawnMock.mock.calls[0]).toEqual(
+      expect.arrayContaining(["codex", ["mcp", "add", "--help"]]),
+    );
     expect(spawnMock).toHaveBeenCalledWith(
       "codex",
       [

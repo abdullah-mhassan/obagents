@@ -8,6 +8,7 @@ import { vaultSyncEngine } from "../../src/vault/sync.js";
 import { createAgent } from "../../src/vault/agent.js";
 import { diffProject } from "../../src/linker/diff.js";
 import { createProgram } from "../../src/cli.js";
+import { __resetCodexSpawn } from "../../src/linker/codex-cli.js";
 
 vi.mock("node:child_process", () => ({
   spawn: vi.fn(),
@@ -17,19 +18,29 @@ const spawnMock = vi.mocked(spawn);
 
 function spawnExited(code: number): EventEmitter {
   const child = new EventEmitter();
+  // Advertise `--scope` on the probe's help read so the codex scope probe
+  // reports supported and registration carries the user-scope entries these
+  // tests assert (mirrors a CLI that supports --scope).
+  (child as any).stdout = {
+    [Symbol.asyncIterator]: async function* () {
+      yield Buffer.from("--scope <scope>  the scope to register the server under\n");
+    },
+  };
+  (child as any).stderr = null;
   queueMicrotask(() => child.emit("exit", code));
-  return child;
+  return <EventEmitter & { stdout: unknown }>child;
 }
 
 describe("obagents gateway commands & global registration", () => {
   let memFS: MemoryFileSystem;
 
   beforeEach(async () => {
-    memFS = useMemoryFileSystem();
-    overrideVaultRoot("/virtual/vault");
-    pathResolver.setHomeDir("/virtual/home");
-    spawnMock.mockReset();
-  });
+      memFS = useMemoryFileSystem();
+      overrideVaultRoot("/virtual/vault");
+      pathResolver.setHomeDir("/virtual/home");
+      spawnMock.mockReset();
+      __resetCodexSpawn();
+    });
 
   afterEach(() => {
     useNodeFileSystem();
