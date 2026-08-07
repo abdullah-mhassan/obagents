@@ -604,7 +604,7 @@ describe("load_agent_context tool", () => {
     const { tools } = await setupAgent();
     const result = await tools.get("load_agent_context")!.handler({ targetAgent: "@mcp-test" });
     const body = parseBody(result) as { note: string };
-    expect(body.note.toLowerCase()).toContain("memory-only");
+    expect(body.note.toLowerCase()).toContain("deterministic");
   });
 });
 
@@ -622,7 +622,7 @@ describe("consult_agent tool", () => {
     const { tools } = await setupAgent();
     const result = await tools.get("consult_agent")!.handler({ targetAgent: "@mcp-test", query: "anything" });
     const body = parseBody(result) as { note: string };
-    expect(body.note.toLowerCase()).toContain("memory-only");
+    expect(body.note.toLowerCase()).toContain("deterministic");
   });
 
   it("flags a thin result as sparse with stop-and-ask guidance", async () => {

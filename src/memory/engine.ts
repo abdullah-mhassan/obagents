@@ -4,7 +4,7 @@ import { agentExists, normalizeAgentName } from "../vault/agent.js";
 import { AgentMemoryVault } from "./vault.js";
 
 export const MEMORY_ONLY_NOTE =
-  "This was a deterministic, memory-only lookup: no files were read and no web search was performed.";
+  "This was a deterministic lookup of this agent's recorded episode log (decisions, tool-call records, skills, and consolidation summaries), scoped to the agent's vault: no project files were read and no web search was performed.";
 export const SPARSE_CONSULT_GUIDANCE =
   "Sparse memory for this query. Report this thin result to the user and ask for approval before any expensive step (spawning a live sub-agent, bulk file reads, or web search). Do not auto-escalate.";
 export const SPARSE_CONSULT_THRESHOLD = 2;
