@@ -36,8 +36,9 @@ describe("paths utility", () => {
       pathResolver.reset();
     });
 
-    it("defaults to OS home directory and standard app target paths", () => {
-      expect(pathResolver.getHomeDir()).toBe(homedir());
+    it("uses isolated test home and standard app target paths", () => {
+      expect(pathResolver.getHomeDir()).toContain(tmpdir());
+      expect(pathResolver.getHomeDir()).not.toBe(homedir());
       expect(pathResolver.getWindsurfMcpPath()).toContain(".codeium");
       expect(pathResolver.getContinueMcpPath()).toContain(".continue");
       expect(pathResolver.getAntigravityMcpPath()).toContain(".gemini");
