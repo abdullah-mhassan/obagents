@@ -1,6 +1,7 @@
 // End-to-end smoke test for the built OB Agents CLI.
-// Backs up the real ~/.obagents vault, drives the production CLI through the
-// full lifecycle, asserts outcomes, then restores the vault exactly.
+// Runs against an isolated vault: $OBAGENTS_VAULT_DIR if set, otherwise a
+// disposable temp dir. Only when explicitly pointed at the real ~/.obagents
+// does it back up / restore that vault.
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, rmSync, cpSync, writeFileSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -9,7 +10,12 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const cli = join(repoRoot, "dist", "cli.js");
-const vaultRoot = join(homedir(), ".obagents");
+const realVaultRoot = join(homedir(), ".obagents");
+const envVault = process.env.OBAGENTS_VAULT_DIR;
+// Only a vault resolving to the real ~/.obagents needs backup/restore; an
+// unset var or any other path is a disposable temp vault.
+const isRealVault = !!envVault && resolve(envVault) === resolve(realVaultRoot);
+const vaultRoot = envVault ? resolve(envVault) : join(tmpdir(), `smoke-vault-${Date.now()}`);
 const stamp = `smoke-${Date.now()}`;
 const rawBackup = join(tmpdir(), `obagents-backup-${stamp}`);
 const rawTemplateDir = join(tmpdir(), `smoke-template-${stamp}`);
@@ -29,7 +35,7 @@ const assert = (cond, label) => (cond ? ok(label) : fail(label, "assertion faile
 function run(args, cwd = repoRoot, env = {}) {
   const r = spawnSync("node", [cli, ...args], {
     cwd,
-    env: { ...process.env, ...env },
+    env: { ...process.env, OBAGENTS_VAULT_DIR: vaultRoot, ...env },
     encoding: "utf8",
   });
   return `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
@@ -43,14 +49,18 @@ try {
     throw new Error("dist/cli.js not found — run `pnpm build` first.");
   }
 
-  // --- backup real vault ---
-  if (existsSync(vaultRoot)) {
-    cpSync(vaultRoot, backup, { recursive: true });
-    console.log(`  backed up ~/.obagents -> ${backup}`);
+  // --- back up real vault (only when explicitly targeting it) ---
+  if (isRealVault) {
+    if (existsSync(vaultRoot)) {
+      cpSync(vaultRoot, backup, { recursive: true });
+      console.log(`  backed up ~/.obagents -> ${backup}`);
+    } else {
+      console.log("  no existing vault to back up");
+    }
+    rmSync(vaultRoot, { recursive: true, force: true });
   } else {
-    console.log("  no existing vault to back up");
+    mkdirSync(vaultRoot, { recursive: true });
   }
-  rmSync(vaultRoot, { recursive: true, force: true });
 
   // --- fixtures ---
   mkdirSync(rawTemplateDir, { recursive: true });
@@ -110,12 +120,14 @@ try {
 } catch (err) {
   fail("smoke run aborted", err);
 } finally {
-  // --- restore real vault ---
-  rmSync(vaultRoot, { recursive: true, force: true });
-  if (existsSync(backup)) {
-    cpSync(backup, vaultRoot, { recursive: true });
-    rmSync(backup, { recursive: true, force: true });
-    console.log("  restored ~/.obagents");
+  // --- restore real vault (only when it was backed up) ---
+  if (isRealVault) {
+    rmSync(vaultRoot, { recursive: true, force: true });
+    if (existsSync(backup)) {
+      cpSync(backup, vaultRoot, { recursive: true });
+      rmSync(backup, { recursive: true, force: true });
+      console.log("  restored ~/.obagents");
+    }
   }
   for (const d of [templateDir, projectDir]) rmSync(d, { recursive: true, force: true });
 }
