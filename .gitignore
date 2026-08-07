@@ -41,6 +41,7 @@ docs/*.md
 !docs/hive.md
 !docs/cli-reference.md
 !docs/release-protocol.md
+!docs/sharing.md
 
 # Editor & Build artifacts
 .commandcode/

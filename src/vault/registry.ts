@@ -1,7 +1,7 @@
 import { REGISTRY_VERSION } from "../utils/constants.js";
 import { getRegistryPath, getVaultRoot } from "../utils/paths.js";
 import { fs } from "../utils/fs.js";
-import { withLock } from "../utils/mutex.js";
+import { withLock, withCrossProcessLock } from "../utils/mutex.js";
 import { CorruptStoreError } from "../utils/errors.js";
 
 export interface AgentRegistryEntry {
@@ -47,10 +47,12 @@ export async function writeRegistry(registry: AgentsRegistry): Promise<void> {
 export function updateRegistry(
   patch: (registry: AgentsRegistry) => AgentsRegistry | Promise<AgentsRegistry>,
 ): Promise<AgentsRegistry> {
-  return withLock(getRegistryPath(), async () => {
-    const registry = await readRegistry();
-    const next = await patch(registry);
-    await writeRegistry(next);
-    return next;
-  });
+  return withCrossProcessLock(`${getRegistryPath()}.lock`, () =>
+    withLock(getRegistryPath(), async () => {
+      const registry = await readRegistry();
+      const next = await patch(registry);
+      await writeRegistry(next);
+      return next;
+    }),
+  );
 }

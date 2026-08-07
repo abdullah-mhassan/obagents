@@ -3,7 +3,7 @@ import { fs, writeJsonAtomic } from "../utils/fs.js";
 import { normalizeProjectPath } from "./project.js";
 import { type SupportedTarget } from "../utils/constants.js";
 import { logger } from "../utils/logger.js";
-import { withLock } from "../utils/mutex.js";
+import { withLock, withCrossProcessLock } from "../utils/mutex.js";
 import { CorruptStoreError } from "../utils/errors.js";
 
 export type AgentProjectLink = {
@@ -31,17 +31,19 @@ export function updateAgentMeta(
   name: string,
   patch: (meta: AgentMeta) => AgentMeta | Promise<AgentMeta>,
 ): Promise<AgentMeta> {
-  return withLock(getAgentMetaPath(name), async () => {
-    await migrateAgentMeta(name);
-    const current = (await getAgentMeta(name)) ?? {
-      name,
-      createdAt: new Date().toISOString(),
-      links: [],
-    };
-    const next = await patch(current);
-    await writeAgentMetaFile(name, next);
-    return next;
-  });
+  return withCrossProcessLock(`${getAgentMetaPath(name)}.lock`, () =>
+    withLock(getAgentMetaPath(name), async () => {
+      await migrateAgentMeta(name);
+      const current = (await getAgentMeta(name)) ?? {
+        name,
+        createdAt: new Date().toISOString(),
+        links: [],
+      };
+      const next = await patch(current);
+      await writeAgentMetaFile(name, next);
+      return next;
+    }),
+  );
 }
 
 export async function setCachedConsolidationStatus(

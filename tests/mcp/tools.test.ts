@@ -265,6 +265,84 @@ describe("update_state tool", () => {
     const episodes = listEpisodes(db, "mcp-test").filter((e) => e.source === "memory");
     expect(episodes.length).toBe(1);
   });
+
+  it("mirrors the recorded bullet into MEMORY.md so the compiled context reflects it live", async () => {
+    const { tools } = await setupAgent();
+    const r = await tools.get("update_state")!.handler({ type: "decision", summary: "use postgresql for storage" });
+    const body = parseBody(r) as { memoryAppended: boolean };
+    expect(body.memoryAppended).toBe(true);
+
+    const memoryPath = getCoreFilePath("mcp-test", "MEMORY.md");
+    const content = await readFile(memoryPath, "utf8");
+    expect(content).toContain("## Latest state");
+    expect(content).toContain("- decision: use postgresql for storage");
+
+    const { compileAgentContext } = await import("../../src/vault/compiler.js");
+    const compiled = await compileAgentContext("mcp-test");
+    expect(compiled.content).toContain("- decision: use postgresql for storage");
+  });
+
+  it("does not double-append an identical bullet on the duplicate path", async () => {
+    const { tools } = await setupAgent();
+    const r1 = await tools.get("update_state")!.handler({ type: "milestone", summary: "implemented feature X" });
+    const b1 = parseBody(r1);
+    expect(b1.duplicate).toBeUndefined();
+    expect(b1.memoryAppended).toBe(true);
+
+    const memoryPath = getCoreFilePath("mcp-test", "MEMORY.md");
+    expect((await readFile(memoryPath, "utf8")).match(/- milestone: implemented feature X/g)!.length).toBe(1);
+
+    const r2 = await tools.get("update_state")!.handler({ type: "milestone", summary: "implemented feature X" });
+    const b2 = parseBody(r2);
+    expect(b2.duplicate).toBe(true);
+
+    // The duplicate path inserts no new episode, so the prose file is untouched
+    // (memoryAppended stays falsey/undefined) and the bullet still appears once.
+    expect(b2.memoryAppended).toBeFalsy();
+    expect((await readFile(memoryPath, "utf8")).match(/- milestone: implemented feature X/g)!.length).toBe(1);
+  });
+
+  it("writes a project-scoped bullet and keeps the global MEMORY.md untouched", async () => {
+    const { tools } = await setupAgent();
+    const PROJ = join(tmpdir(), "obagents-update-state-proj");
+    const r = await tools.get("update_state")!.handler({ type: "build-fixed", summary: "fixed the ci pipeline", project: PROJ });
+    const body = parseBody(r);
+    expect(body.success).toBe(true);
+    expect(body.memoryAppended).toBe(true);
+
+    const scopedPath = getCoreFilePath("mcp-test", "MEMORY.md", PROJ);
+    const scopedContent = await readFile(scopedPath, "utf8");
+    expect(scopedContent).toContain("## Latest state");
+    expect(scopedContent).toContain("- build-fixed: fixed the ci pipeline");
+
+    const globalContent = await readFile(getCoreFilePath("mcp-test", "MEMORY.md"), "utf8");
+    expect(globalContent).not.toContain("fixed the ci pipeline");
+
+    const { compileAgentContext } = await import("../../src/vault/compiler.js");
+    const compiled = await compileAgentContext("mcp-test", PROJ);
+    expect(compiled.content).toContain("- build-fixed: fixed the ci pipeline");
+  });
+
+  it("refuses to grow MEMORY.md past the char cap instead of corrupting it", async () => {
+    const { tools } = await setupAgent();
+    const memoryPath = getCoreFilePath("mcp-test", "MEMORY.md");
+
+    // Pre-fill MEMORY.md so adding the new bullet would exceed MEMORY_CHAR_LIMIT.
+    await writeFile(memoryPath, "# Working Memory\n\n" + "y".repeat(2480), "utf8");
+
+    // The bullet is skipped on the prose side (won't violate the cap) but the
+    // episode still records in the FTS store, which stays the source of truth.
+    const r = await tools.get("update_state")!.handler({ type: "decision", summary: "still recorded in the store" });
+    const body = parseBody(r);
+    expect(body.success).toBe(true);
+    expect(body.memoryAppended).toBe(false);
+    expect(body.memorySkipped).toBe("char-limit");
+
+    const content = await readFile(memoryPath, "utf8");
+    expect(content.length).toBeLessThanOrEqual(2500);
+    expect(content).not.toContain("still recorded in the store");
+    expect(listEpisodes(db, "mcp-test").some((e) => e.source === "memory" && e.content === "still recorded in the store")).toBe(true);
+  });
 });
 
 describe("search_history tool", () => {

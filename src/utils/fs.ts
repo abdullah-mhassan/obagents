@@ -110,3 +110,12 @@ export function useMemoryFileSystem(): MemoryFileSystem {
 export function useNodeFileSystem(): void {
   setFileSystem(new NodeFileSystem());
 }
+
+/**
+ * True when the active file system is the in-memory one (used by unit tests).
+ * A memory-backed FS has no cross-process semantics, so callers that need
+ * cross-process exclusivity should skip their file-lock dance in that case.
+ */
+export function isMemoryFileSystem(): boolean {
+  return activeFS instanceof MemoryFileSystem;
+}

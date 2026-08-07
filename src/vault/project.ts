@@ -2,7 +2,7 @@ import { join, resolve, dirname } from "node:path";
 import { createHash } from "node:crypto";
 import { fs, writeJsonAtomic } from "../utils/fs.js";
 import { getAgentDir } from "../utils/paths.js";
-import { withLock } from "../utils/mutex.js";
+import { withLock, withCrossProcessLock } from "../utils/mutex.js";
 import { CorruptStoreError } from "../utils/errors.js";
 
 export interface ProjectConfig {
@@ -96,12 +96,14 @@ export class ProjectVault {
     patch: (config: ProjectConfig) => ProjectConfig | Promise<ProjectConfig>,
   ): Promise<ProjectConfig> {
     const path = this.getProjectConfigPath(projectDir);
-    return withLock(path, async () => {
-      const current = await this.getProjectConfig(projectDir);
-      const next = await patch(current);
-      await this.writeProjectConfig(projectDir, next);
-      return next;
-    });
+    return withCrossProcessLock(`${path}.lock`, () =>
+      withLock(path, async () => {
+        const current = await this.getProjectConfig(projectDir);
+        const next = await patch(current);
+        await this.writeProjectConfig(projectDir, next);
+        return next;
+      }),
+    );
   }
 
   getCoreFilePath(name: string, file: string, projectDir?: string): string {

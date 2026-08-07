@@ -4,6 +4,7 @@ import { parse as parseYaml } from "yaml";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { ARCHETYPE_NAMES } from "../src/vault/triad.js";
+import { VERSION } from "../src/utils/constants.js";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 
@@ -48,5 +49,10 @@ describe("release metadata (publish blockers)", () => {
       const entries = (await readdir(dir)).sort();
       expect(entries, `templates/archetypes/${name}`).toEqual(["MEMORY.md", "SOUL.md", "USER.md"]);
     }
+  });
+
+  it("keeps the CLI/MCP VERSION in src/utils/constants.ts in lockstep with package.json", async () => {
+    const pkg = await readJson(join(root, "package.json"));
+    expect(VERSION).toBe(pkg.version);
   });
 });

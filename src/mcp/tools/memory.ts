@@ -15,6 +15,7 @@ import {
 } from "../../utils/constants.js";
 import { getAgentDir } from "../../utils/paths.js";
 import { encodeProjectTag } from "../../memory/project-tag.js";
+import { appendMemoryBullet } from "../../memory/prose-memory.js";
 import { compileAgentContext } from "../../vault/compiler.js";
 import { setCachedConsolidationStatus } from "../../vault/metadata.js";
 import { withAgentContext, type RegisterToolsOptions } from "./utils.js";
@@ -108,6 +109,23 @@ export function registerMemoryTools(
       const status = store.getConsolidationStatus(scopedProject);
       await setCachedConsolidationStatus(resolvedAgent, scopedProject, status.needsConsolidation);
 
+      // Refresh the agent's prose working-memory file so the passive/shared
+      // MEMORY.md view sees the freshly recorded entry without waiting for
+      // consolidation. Best-effort and idempotent: a duplicate bullet, or a
+      // write that would exceed MEMORY_CHAR_LIMIT, is skipped rather than
+      // corrupting the file. The FTS5 store above remains the source of truth.
+      let memoryAppended = false;
+      let memorySkipped: "duplicate" | "char-limit" | null = null;
+      try {
+        const memoryProject = scopedProject === GLOBAL_PROJECT_TAG ? undefined : scopedProject;
+        const res = await appendMemoryBullet(resolvedAgent, memoryProject, type, summary);
+        memoryAppended = res.appended;
+        memorySkipped = res.skipped;
+      } catch {
+        // Never fail an otherwise-successful episode write because the prose
+        // mirror could not be refreshed.
+      }
+
       return {
         success: true,
         entryId: episode.id,
@@ -118,6 +136,8 @@ export function registerMemoryTools(
         rowsSinceConsolidation: status.rowsSinceConsolidation,
         threshold: CONSOLIDATION_TRIGGER_THRESHOLD,
         nearDuplicates: status.nearDuplicates,
+        memoryAppended,
+        memorySkipped,
       };
     }),
   );
