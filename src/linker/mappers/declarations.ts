@@ -5,7 +5,6 @@ import type { MapperDescriptor } from "./base.js";
 import { fs } from "../../utils/fs.js";
 import { getClaudeSettingsPath, pathResolver } from "../../utils/paths.js";
 import { logger } from "../../utils/logger.js";
-import { projectVault, normalizeProjectPath } from "../../vault/project.js";
 import { aiderDescriptor } from "./aider.js";
 
 import { parseJsonc, resolveBinaryCommand } from "../mcp.js";

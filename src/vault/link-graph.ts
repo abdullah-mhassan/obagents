@@ -1,6 +1,6 @@
 import { getAgentMeta, updateAgentMeta as updateAgentMetaStore, type AgentMeta } from "./metadata.js";
 import { projectVault, normalizeProjectPath, type ProjectConfig } from "./project.js";
-import { readRegistry, updateRegistry, type AgentsRegistry } from "./registry.js";
+import { updateRegistry } from "./registry.js";
 import { type SupportedTarget } from "../utils/constants.js";
 
 export type LinkStateAction = "link" | "unlink";

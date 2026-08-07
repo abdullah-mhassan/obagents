@@ -3,7 +3,6 @@ import type { AdapterResult, McpServerConfig, LinkContext, TargetAdapter } from 
 import { createMapper } from "./mappers/base.js";
 import { DESCRIPTORS } from "./mappers/declarations.js";
 import { compileAgentContext, compileRosterContext } from "../vault/compiler.js";
-import { projectVault, normalizeProjectPath } from "../vault/project.js";
 import type { SupportedTarget } from "../utils/constants.js";
 import { OBAGENTS_END_MARKER, OBAGENTS_START_PREFIX } from "../utils/constants.js";
 import { fs } from "../utils/fs.js";

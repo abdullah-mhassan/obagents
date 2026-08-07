@@ -196,6 +196,28 @@ describe("searchHistory fallback scoping", () => {
   });
 });
 
+describe("searchHistory non-Latin FTS (Arabic)", () => {
+  beforeEach(() => {
+    addEpisode(db, {
+      agentName: "ar",
+      source: "memory",
+      content: "تم إصلاح السخان في المنزل اليوم",
+      tags: "memory",
+    });
+  });
+
+  it("matches an Arabic-only query against an Arabic memory episode", () => {
+    const hits = searchHistory(db, "صيانة السخان في المنزل", { agentName: "ar" });
+    expect(hits.length).toBeGreaterThan(0);
+    expect(hits.some((h) => h.content.includes("السخان"))).toBe(true);
+  });
+
+  it("does not crash and yields a no-match result for absent Arabic text", () => {
+    expect(() => searchHistory(db, "لا يوجد هذا المصطلح", { agentName: "ar" })).not.toThrow();
+    expect(searchHistory(db, "لا يوجد هذا المصطلح", { agentName: "ar" })).toHaveLength(0);
+  });
+});
+
 describe("episode CRUD helpers", () => {
   it("listEpisodes returns episodes in reverse id order", () => {
     addEpisode(db, { agentName: "a", source: "action", content: "first" });

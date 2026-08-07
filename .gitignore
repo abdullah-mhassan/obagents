@@ -43,6 +43,9 @@ docs/*.md
 !docs/release-protocol.md
 !docs/sharing.md
 
+# Archived internal/planning docs stay local (consistent with docs/*.md policy)
+docs/archive/
+
 # Editor & Build artifacts
 .commandcode/
 .parcel-cache/

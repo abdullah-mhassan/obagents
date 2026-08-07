@@ -100,7 +100,7 @@ export function listEpisodes(
 }
 
 function sanitizeFtsQuery(query: string): string {
-  const tokens = query.split(/[^a-zA-Z0-9]+/).filter((t) => t.length > 0);
+  const tokens = query.split(/[^\p{L}\p{N}]+/u).filter((t) => t.length > 0);
   if (tokens.length === 0) return "";
   return tokens.map((t) => `"${t}"`).join(" OR ");
 }

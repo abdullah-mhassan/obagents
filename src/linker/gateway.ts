@@ -1,14 +1,11 @@
 import { fs } from "../utils/fs.js";
-import { pathResolver } from "../utils/paths.js";
 import { logger } from "../utils/logger.js";
 import {
-  SUPPORTED_TARGETS,
   GLOBAL_CAPABLE_TARGETS,
-  PROJECT_ONLY_TARGETS,
   type SupportedTarget,
 } from "../utils/constants.js";
 import { DESCRIPTORS } from "./mappers/declarations.js";
-import { manageMcpConfig, parseJsonc, resolveBinaryCommand, type McpFormat } from "./mcp.js";
+import { manageMcpConfig, parseJsonc, resolveBinaryCommand } from "./mcp.js";
 import { adapters } from "./adapters/mcp.js";
 import { runCodexMcp } from "./mappers/declarations.js";
 import { resolve } from "node:path";

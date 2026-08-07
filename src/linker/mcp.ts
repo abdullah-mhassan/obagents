@@ -2,7 +2,6 @@ import { dirname } from "node:path";
 import { logger } from "../utils/logger.js";
 import { fs } from "../utils/fs.js";
 import { adapters, isStaleObagentsKey, isLegacyMyagentKey } from "./adapters/mcp.js";
-import { resolve } from "node:path";
 
 export type McpFormat = "mcpServers" | "servers" | "array" | "opencode";
 
@@ -102,7 +101,11 @@ export async function manageMcpConfig(options: McpInjectionOptions): Promise<voi
 
   const serverName = nameOverride || "obagents";
   const serverCommand = command || resolveBinaryCommand();
-  const serverArgs = args || ["serve"];
+  // When the caller provides explicit args, leave them untouched. Only when args
+  // falls back to the default (not provided) and a projectDir is known do we pin
+  // the MCP gateway to that project via --project, so it isn't resolved from the
+  // gateway's launch CWD.
+  const serverArgs = args || (projectDir ? ["serve", "--project", projectDir] : ["serve"]);
 
   const adapter = adapters[format];
   if (!adapter) {

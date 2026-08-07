@@ -156,6 +156,9 @@ If `obagents` isn't found, make sure you ran `npm link` — or use `pnpm tsx src
 **better-sqlite3 installation failures**
 Native extension build failures can happen during `pnpm install`. Make sure Python and C++ build tools are installed for your OS if you hit prebuild or node-gyp errors, and run `pnpm approve-builds` to authorize the install scripts.
 
+**`Module did not self-register` (Node >= 22)**
+If commands or tests fail with `Module did not self-register` — or a flood of EACCES / BAD signal errors across many tests — the native module is stale. Run `pnpm rebuild better-sqlite3` first, then retry.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
