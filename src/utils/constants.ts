@@ -1,4 +1,4 @@
-export const VERSION = "0.3.1";
+export const VERSION = "0.4.0";
 
 export const VAULT_DIR_NAME = ".obagents";
 export const AGENTS_REGISTRY_FILE = "agents.json";
