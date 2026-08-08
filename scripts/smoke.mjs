@@ -20,6 +20,11 @@ const stamp = `smoke-${Date.now()}`;
 const rawBackup = join(tmpdir(), `obagents-backup-${stamp}`);
 const rawTemplateDir = join(tmpdir(), `smoke-template-${stamp}`);
 const rawProjectDir = join(tmpdir(), `smoke-project-${stamp}`);
+// Fake $HOME for every spawned CLI: PathResolver reads os.homedir(), which
+// honors $HOME on POSIX, so this keeps target config writes (cursor's
+// ~/.cursor/mcp.json, claude's ~/.claude.json, …) out of the real home dir.
+// The vault stays controlled by OBAGENTS_VAULT_DIR above.
+const smokeHome = join(tmpdir(), `smoke-home-${stamp}`);
 let backup = rawBackup;
 let templateDir = rawTemplateDir;
 let projectDir = rawProjectDir;
@@ -35,7 +40,7 @@ const assert = (cond, label) => (cond ? ok(label) : fail(label, "assertion faile
 function run(args, cwd = repoRoot, env = {}) {
   const r = spawnSync("node", [cli, ...args], {
     cwd,
-    env: { ...process.env, OBAGENTS_VAULT_DIR: vaultRoot, ...env },
+    env: { ...process.env, OBAGENTS_VAULT_DIR: vaultRoot, HOME: smokeHome, ...env },
     encoding: "utf8",
   });
   return `${r.stdout ?? ""}${r.stderr ?? ""}`.trim();
@@ -61,6 +66,7 @@ try {
   } else {
     mkdirSync(vaultRoot, { recursive: true });
   }
+  mkdirSync(smokeHome, { recursive: true });
 
   // --- fixtures ---
   mkdirSync(rawTemplateDir, { recursive: true });
@@ -129,7 +135,7 @@ try {
       console.log("  restored ~/.obagents");
     }
   }
-  for (const d of [templateDir, projectDir]) rmSync(d, { recursive: true, force: true });
+  for (const d of [templateDir, projectDir, smokeHome]) rmSync(d, { recursive: true, force: true });
 }
 
 console.log(`\nSMOKE TEST ${failures === 0 ? "PASSED" : `FAILED (${failures})`}\n`);
