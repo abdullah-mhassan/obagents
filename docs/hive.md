@@ -11,7 +11,7 @@ This means you can have a "Hive Orchestrator" agent that delegates tasks to spec
 OB Agents uses a single, global MCP server (`obagents serve`) rather than separate per-agent instances.
 
 ### 1. User-Level vs Per-Project Fallback Registration
-- **User-Level (Global) Registration:** Global-capable tools (e.g., Cursor, Windsurf, Antigravity, Claude Code, Roo Code, etc.) register the single `obagents` gateway server at the user configuration level via `obagents gateway install` (or during target linking). Once installed globally, a single MCP server handles requests across all your projects and agents.
+- **User-Level (Global) Registration:** Global-capable core tools (Cursor, Copilot, Claude Code, Codex, OpenCode, Antigravity) register the single `obagents` gateway server at the user configuration level via `obagents gateway install` (or during target linking). Once installed globally, a single MCP server handles requests across all your projects and agents.
 - **Per-Project Fallback Registration:** For project-scoped tools or project-specific configurations, linking writes a fallback entry invoking `obagents serve -p <projectPath>`, which explicitly binds the server to that project root.
 
 Stale per-agent entries from earlier versions (`obagents-<agent>-<projectHash>`) are automatically migrated and cleaned up during link and gateway operations.
@@ -72,31 +72,22 @@ Here are the tools exposed to your AI agent when using Hive Orchestration:
 
 Not every supported target consumes the OB Agents MCP server (the Active Layer). A target "uses MCP" if and only if its mapper descriptor declares an `mcp:` block; at `link` / `sync` time or during `obagents gateway install`, MCP configuration files write the `obagents serve` invocation into the target's MCP configuration. Targets without an `mcp:` block use only the Passive Layer (injected instructions or core file paths).
 
-Of the 17 supported targets, **14 consume the MCP server** and **3 do not**.
+OB Agents ships a **verified core target set** (`CORE_TARGETS`): of the 7 core targets, **6 consume the MCP server** and **1 (`generic`) does not**. Targets outside the core (windsurf, roo, continue, kilo, grok, qwen, pi, swe-agent, aider, command-code) remain in the catalog for **unlink-only cleanup** of legacy wiring — they can no longer be linked.
 
 | Target | Uses MCP? | Config file written | Wiring mechanism |
 |--------|-----------|---------------------|------------------|
 | cursor | ✅ | `.cursor/mcp.json` | mcpServers |
-| windsurf | ✅ | `~/.codeium/windsurf/mcp_config.json` | mcpServers |
-| roo | ✅ | `cline_mcp_settings.json` (globalStorage) | mcpServers |
-| continue | ✅ | `~/.continue/config.json` | array |
-| copilot | ✅ | `.vscode/mcp.json` | servers |
-| claude-code | ✅ | `.mcp.json` | mcpServers |
+| copilot | ✅ | `~/.vscode/mcp.json` | servers |
+| claude-code | ✅ | `~/.claude.json` (global) | mcpServers |
 | opencode | ✅ | `opencode.json` | opencode |
 | codex | ✅ | `codex mcp add obagents` (exec) | CLI |
-| kilo | ✅ | `kilo.json` | mcpServers |
-| grok | ✅ | `.grok/mcp.json` | mcpServers |
-| qwen | ✅ | `.qwen/settings.json` | mcpServers |
-| pi | ✅ | `.pi/mcp.json` | mcpServers |
 | antigravity | ✅ | `~/.gemini/config/mcp_config.json` | mcpServers |
-| command-code | ✅ | `.mcp.json` | mcpServers |
 | generic | ❌ | `AGENT.md` | instructions only |
-| swe-agent | ❌ | `swe_agent_instructions.md` | instructions only |
-| aider | ❌ | `.aider.conf.yml` | core file paths only |
 
 **Notes:**
-- `codex` does not write a config file — it registers the global server via the `codex mcp add obagents` CLI command at link time and removes it with `codex mcp remove obagents` at clean time.
+- `codex` does not write a config file — it registers the global server via the `codex mcp add obagents` CLI command at link time and removes it with `codex mcp remove obagents` at clean time. The `--scope user` flag is passed **only when the installed Codex CLI supports it** — the CLI shape is probed at runtime (`codex mcp add --help`) rather than hard-coded.
+- `claude-code` registers its MCP server in the **global** `~/.claude.json` (not a project-local `.mcp.json`); its `afterWrite` hook also adds the project's `CLAUDE.md` to `~/.claude/settings.json` `contextPaths`.
 - `antigravity` writes to a global Gemini config (`~/.gemini/config/mcp_config.json`) rather than a project-local file, but still consumes the MCP server.
-- `command-code` shares `<project>/AGENTS.md` (its memory file) with the `antigravity` target and `<project>/.mcp.json` with `claude-code` — agent-scoped marker blocks and the shared `mcpServers` entry shape make both coexist safely; one `.mcp.json` entry serves both `claude-code` and `command-code`.
-- `generic` (`AGENT.md`), `swe-agent` (`swe_agent_instructions.md`), and `aider` (`.aider.conf.yml`) rely solely on the Passive Layer — they receive the agent's compiled context but expose no MCP tools.
+- `generic` (`AGENT.md`) relies solely on the Passive Layer — it receives the agent's compiled context but exposes no MCP tools.
+- If a Codex MCP registration fails, `link` **fails loudly** (non-zero exit) instead of printing a warning — a wiring failure never reports a false "Linked".
 

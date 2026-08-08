@@ -25,7 +25,7 @@ OB Agents maintains a single **Vault** for each AI agent's brain — personality
 - **Vault** — centralized storage (`~/.obagents`) for every agent's persona, memory, and skills.
 - **Per-project isolation** — each agent's target integrations and working memory are tracked and scoped per project directory.
 - **Transactional failure-safety** — link/unlink mutations apply target adapters first with automatic rollback on error, and only commit graph metadata on success.
-- **Passive layer** — auto-injects agent state into IDE/CLI config files across 17 targets (Cursor, Windsurf, Roo Code, Continue.dev, GitHub Copilot, Claude Code, Aider, OpenCode, Codex, Kilo, Grok, Qwen, Pi, SWE-Agent, Antigravity, Command Code, and a generic `AGENT.md` fallback). Passive targets receive the full compiled active-agent state — `SOUL`, project-scoped `MEMORY`, and `USER` context.
+- **Passive layer** — auto-injects agent state into IDE/CLI config files across a verified 7-target core (`claude-code`, `cursor`, `codex`, `opencode`, `antigravity`, `copilot`, and a passive `AGENT.md` fallback). Passive targets receive the full compiled active-agent state — `SOUL`, project-scoped `MEMORY`, and `USER` context. (Demoted targets like windsurf/roo/kilo remain **unlink-only**: `unlink` can still clean up legacy wiring, but nothing new is ever written for them.)
 - **Active layer** — a live, project-aware MCP gateway (`obagents serve`) for dynamic read/write/search by GUI and CLI tools.
 - **Hive orchestration** — spawn, link, and consult sub-agents autonomously via project-aware MCP tools. See the [Hive guide](docs/hive.md).
 - **Deep memory** — a SQLite FTS5 backend tracking historical tasks, skills, and project-scoped memory consolidation.
@@ -57,7 +57,7 @@ OB Agents/
 │   ├── cli.ts     # Entry point
 │   ├── commands/  # CLI subcommands (create, list, link, etc.)
 │   ├── vault/     # Agent CRUD, Link Graph, and Core (SOUL, MEMORY, USER)
-│   ├── linker/    # Orchestrator for linking to specific tools (17 targets)
+│   ├── linker/    # Orchestrator for linking to specific tools (7 core / 17-entry catalog)
 │   ├── memory/    # SQLite FTS5 initialization and FTS search
 │   ├── mcp/       # MCP stdio server setup and tools
 │   └── utils/     # Constants, paths, logging, and the FileSystem seam

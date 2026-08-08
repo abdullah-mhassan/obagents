@@ -11,7 +11,7 @@
 | **Active** | `obagents serve` MCP gateway (`read_state`, `update_state`, `search_history`, `consult_agent`, …) | **Live** — every call reads/writes the Vault directly. |
 
 The passive layer is how state reaches tools that only read config files
-(Cursor, Windsurf, Roo, …). The active layer is how GUI/CLI tools read and
+(Cursor, Copilot, Claude Code, …). The active layer is how GUI/CLI tools read and
 write the same brain in real time.
 
 ## When do the other tools see a new memory?

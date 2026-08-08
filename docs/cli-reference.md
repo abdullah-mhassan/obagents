@@ -45,15 +45,15 @@ Set the active runtime agent for the Hive in the current project. Rewrites the c
 
 Inject the compiled agent brain into the target tool's configuration in the current directory with transactional failure-safety.
 
-- `-t, --target <tool>`: Specific tool to target. Supported targets: `cursor`, `windsurf`, `roo`, `continue`, `copilot`, `claude-code`, `aider`, `generic`, `opencode`, `codex`, `kilo`, `grok`, `qwen`, `pi`, `swe-agent`, `antigravity`, `command-code`.
+- `-t, --target <tool>`: Specific tool to target. Supported targets (the verified core set): `claude-code`, `cursor`, `codex`, `opencode`, `antigravity`, `copilot`, `generic`. Demoted/legacy targets (e.g. `windsurf`, `roo`, `continue`, `kilo`, `grok`, `qwen`, `pi`, `swe-agent`, `aider`, `command-code`) can no longer be linked — they remain available to `unlink` only, for cleaning up old wiring.
 - `--dry-run`: Show what would be written without making changes. Enforces a hard no-write contract across graph updates, target files, global settings, MCP registrations, and external CLI hooks.
 - `-f, --force`: Overwrite conflicting non-OB Agents content.
 - `--replace`: Replace the existing target set instead of unioning new targets into it (default link is additive).
 
 > **Target Content Modes & MCP Naming**
-> - **MCP Targets:** MCP-capable targets (e.g. `cursor`, `windsurf`, `roo`, `claude-code`, `opencode`, `codex`, `antigravity`, `command-code`, etc.) receive the compact Hive roster and register the single `obagents` global gateway MCP server.
-> - **Passive Targets:** Targets without MCP capabilities (`generic` / `AGENT.md` and `swe-agent` / `swe_agent_instructions.md`) receive the compact Hive roster PLUS the active agent's compiled `SOUL.md`, project-scoped `MEMORY.md`, and `USER.md` content.
-> - **Aider Target:** Linking `aider` ensures the project-scoped `MEMORY.md` file exists prior to configuring `.aider.conf.yml`.
+> - **MCP Targets:** MCP-capable core targets (`cursor`, `copilot`, `claude-code`, `opencode`, `codex`, `antigravity`) receive the compact Hive roster and register the single `obagents` global gateway MCP server.
+> - **Passive Target:** `generic` (no MCP) receives the compact Hive roster PLUS the active agent's compiled `SOUL.md`, project-scoped `MEMORY.md`, and `USER.md` content injected into `AGENT.md`.
+> - **Fail-loud wiring:** if a target's MCP registration fails (e.g. the Codex CLI rejects the registration), `link` exits non-zero instead of printing a warning and claiming success.
 
 ### `obagents unlink <agent>`
 
@@ -94,7 +94,7 @@ Run the MCP Hive gateway (Active Layer) for a project or environment. Provides d
 
 ### `obagents gateway install`
 
-Ensure user-level (global) MCP entries for the `obagents` gateway across all global-capable tools. Automatically cleans up stale per-agent entries.
+Ensure user-level (global) MCP entries for the `obagents` gateway across all core global-capable tools (cursor, copilot, claude-code, opencode, codex, antigravity). Automatically cleans up stale per-agent entries.
 
 - `--dry-run`: Show what would be installed without making changes.
 
@@ -106,7 +106,7 @@ List registration status of the `obagents` gateway across supported tools (globa
 
 ### `obagents gateway uninstall`
 
-Remove user-level (global) MCP entries for the `obagents` gateway across all global-capable tools.
+Remove user-level (global) MCP entries for the `obagents` gateway across all core global-capable tools.
 
 - `--dry-run`: Show what would be uninstalled without making changes.
 
