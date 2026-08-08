@@ -39,6 +39,11 @@ const BACKOFF_MAX_MS = 100;
 // on 'exit'/SIGINT and avoid leaving cruft behind.
 const heldLockPaths = new Set<string>();
 let cleanupRegistered = false;
+// Ensures every acquisition attempt gets a unique temp-file name even when
+// many attempts from the same process land in the same millisecond — a shared
+// name would let one attempt's cleanup unlink another attempt's not-yet-linked
+// temp file (ENOENT on link).
+let acquireAttemptSeq = 0;
 
 function registerLockCleanup(): void {
   if (cleanupRegistered) return;
@@ -75,7 +80,7 @@ function isPidAlive(pid: number): boolean {
 }
 
 /** A lock file is stale if its recorded owner is dead or it is too old. */
-async function isLockStale(lockPath: string): Promise<boolean> {
+export async function isLockStale(lockPath: string): Promise<boolean> {
   let content: string;
   try {
     content = await fsp.readFile(lockPath, "utf8");
@@ -84,9 +89,17 @@ async function isLockStale(lockPath: string): Promise<boolean> {
     return false;
   }
   const info = parseLockOwner(content);
-  // Unparseable/incomplete lock files are treated as stale so they can be
-  // reclaimed rather than wedging every subsequent writer forever.
-  if (!info) return true;
+  if (!info) {
+    // The lock file exists but does not parse as a pid/ts record. This used to
+    // happen mid-acquisition: the previous implementation created the file
+    // with open("wx") and wrote the pidfile content afterwards, so a contender
+    // could read the empty file and reclaim a LIVE lock (granting two holders).
+    // Acquisition is now atomic (temp file + hard link), so an unparseable
+    // file can only be the remnant of a crashed holder; only reclaim it once
+    // it is older than the stale threshold, otherwise it is a busy holder.
+    const stat = await fsp.stat(lockPath).catch(() => null);
+    return stat !== null && Date.now() - stat.mtimeMs > STALE_AGE_MS;
+  }
   if (!isPidAlive(info.pid)) return true;
   return Date.now() - info.ts > STALE_AGE_MS;
 }
@@ -121,27 +134,35 @@ export async function withCrossProcessLock<T>(
   let acquired = false;
   try {
     let attempt = 0;
+    const content = `pid:${process.pid}\nts:${Date.now()}\n`;
     // eslint-disable-next-line no-constant-condition
     while (true) {
+      // Create the pidfile atomically: write to a temp file in the same
+      // directory, then hard-link it into place. A plain open("wx") would
+      // leave the lock path visible EMPTY between creation and the content
+      // write, and a contender could read that empty file, misjudge it stale,
+      // and reclaim a lock still held by a live owner (two holders => lost
+      // updates under cross-process contention). link() is atomic and fails
+      // with EEXIST when the lock path exists, preserving exclusive semantics.
+      const tmpPath = `${resolved}.${process.pid}.${Date.now()}.${acquireAttemptSeq++}.tmp`;
+      await fsp.writeFile(tmpPath, content, "utf8");
       try {
-        const handle = await fsp.open(resolved, "wx");
-        const content = `pid:${process.pid}\nts:${Date.now()}\n`;
-        await handle.writeFile(content, "utf8");
-        await handle.sync();
-        await handle.close();
+        await fsp.link(tmpPath, resolved);
         acquired = true;
         break;
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code !== "EEXIST") {
           throw err;
         }
-        // Contended: recover any stale lock, then back off and retry.
+        // Contended: recover any truly stale lock, then back off and retry.
         if (await isLockStale(resolved)) {
           await fsp.unlink(resolved).catch(() => undefined);
           continue;
         }
         await sleepBackoff(attempt);
         attempt += 1;
+      } finally {
+        await fsp.unlink(tmpPath).catch(() => undefined);
       }
     }
     heldLockPaths.add(resolved);

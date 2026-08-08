@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { withCrossProcessLock } from "../../src/utils/mutex.js";
+import { withCrossProcessLock, isLockStale } from "../../src/utils/mutex.js";
 
 function acquireAndWrite(lockPath: string, value: number): Promise<number> {
   // Simulate a read-modify-write that is NOT atomic: read, await, then write.
@@ -46,6 +46,23 @@ describe("withCrossProcessLock", () => {
     );
     // Final persisted counter reflects all N increments, i.e. zero interleaving.
     expect(readFileSync(join(tmpDir, "counter.txt"), "utf8")).toBe(String(size));
+  });
+
+  it("does not reclaim a fresh unparseable lockfile, but reclaims an old one", async () => {
+    // The historic race: a lock path is briefly visible EMPTY between creation
+    // and the pid/ts content write. A fresh unparseable file must be treated
+    // as a busy holder, not stale, or two processes can hold the lock at once.
+    const freshEmpty = join(tmpDir, "fresh-empty.lock");
+    writeFileSync(freshEmpty, "", "utf8");
+    expect(await isLockStale(freshEmpty)).toBe(false);
+
+    // A crashed holder's empty lockfile is reclaimable once it ages out.
+    const oldEmpty = join(tmpDir, "old-empty.lock");
+    writeFileSync(oldEmpty, "", "utf8");
+    const { utimes } = await import("node:fs/promises");
+    const oldTs = new Date(Date.now() - 60_000);
+    await utimes(oldEmpty, oldTs, oldTs);
+    expect(await isLockStale(oldEmpty)).toBe(true);
   });
 
   it("reclaims a stale lock whose recorded pid is dead", async () => {
