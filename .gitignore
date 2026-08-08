@@ -6,6 +6,9 @@ coverage
 *.log
 
 # Dogfood / Generated IDE Configs & Scratch Directories
+.kilo/
+.remember/
+.hermes/
 .agents/
 .aider.conf.yml
 .claude/
